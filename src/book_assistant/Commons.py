@@ -5,6 +5,10 @@
 
 import sys
 import re
+import time
+
+import numpy as np
+from typing import Any, Tuple, Callable, Iterable
 
 debug   = False
 
@@ -64,13 +68,40 @@ def debug(message: str):
     if debug:
         log(magenta(message))
 
+def is_debug() -> bool:
+    return debug
 
 def set_debug(_debug: bool):
     global debug
     debug = _debug
 
+def read_dict(file_path: str | Iterable[str]) -> dict[str, str]:
+    result = {}
 
-def read_dict(filepath: str) -> dict[str, str]:
-    with open(filepath, encoding='utf-8') as f:
-        return dict((m.group(1).strip(), m.group(2).strip())
-            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE) if m.group(1).strip())
+    for path in [file_path] if isinstance(file_path, str) else sorted(file_path):
+        with open(path, encoding='utf-8') as f:
+            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE):
+                key = m.group(1).strip()
+                if key:
+                    result[key] = m.group(2).strip()
+    return result
+
+
+def measure_time(func:  Callable[[], Any]) -> Tuple[Any, float]:
+    start = time.perf_counter_ns()
+    result = func()
+    end = time.perf_counter_ns()
+    return result, (end - start) / 1_000_000_000
+
+
+def single_channel(audio: np.ndarray) -> np.ndarray:
+    audio = audio.astype(np.float32)
+    if audio.ndim == 1:
+        return audio
+    if audio.ndim == 2:
+        if audio.shape[0] == 1:
+            return audio[0, :]
+        elif audio.shape[1] == 1:
+            return audio[:, 0]
+
+    raise ValueError(f"Malformed audio: expected mono or simple stereo - ndim: {audio.ndim}, shape: {audio.shape}")
