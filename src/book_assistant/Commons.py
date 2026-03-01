@@ -9,7 +9,9 @@ Commons.py — Shared utilities for BookAssistant.
 
 import sys
 import time
-from typing import Callable, Any, Tuple
+import re
+import numpy as np
+from typing import Any, Tuple, Callable, Iterable
 
 # When True, debug() calls emit output; set via set_debug().
 debugging = False
@@ -108,7 +110,16 @@ def error(message: str) -> None:
 
     :param message:     error description
     """
-    log(red(message))
+    log(red(f"ERROR: {message}"))
+
+def warning(message: str) -> None:
+    """Log *message* in yellow to stderr.
+
+    Intended for warnings.
+
+    :param message:     warning description
+    """
+    log(yellow(f"WARNING: {message}"))
 
 def debug(message: str) -> None:
     """Log *message* in magenta to stderr, but only when debugging is enabled.
@@ -133,17 +144,40 @@ def set_debug(_debug: bool) -> None:
     global debugging
     debugging = _debug
 
+def is_debug() -> bool:
+    return debugging
+
 def measure_time(func: Callable[[], Any]) -> Tuple[Any, float]:
     """Call *func*, measure its wall-clock duration, and return both.
 
-    Uses time.perf_counter_ns() for nanosecond resolution, then converts
-    the elapsed time to seconds for a human-readable result.
-
     :param func:    a zero-argument callable to time
     :return:        a (result, elapsed_seconds) tuple where *result* is
-                    whatever *func* returned and *elapsed_seconds* is a float
+                    whatever *func* returned and *elapsed_seconds* is a float    start = time.perf_counter_ns()
     """
-    start  = time.perf_counter_ns()
+    start = time.perf_counter_ns()
     result = func()
-    end    = time.perf_counter_ns()
+    end = time.perf_counter_ns()
     return result, (end - start) / 1_000_000_000
+
+def read_dict(file_path: str | Iterable[str]) -> dict[str, str]:
+    result = {}
+
+    for path in [file_path] if isinstance(file_path, str) else sorted(file_path):
+        with open(path, encoding='utf-8') as f:
+            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE):
+                key = m.group(1).strip()
+                if key:
+                    result[key] = m.group(2).strip()
+    return result
+
+def single_channel(audio: np.ndarray) -> np.ndarray:
+    audio = audio.astype(np.float32)
+    if audio.ndim == 1:
+        return audio
+    if audio.ndim == 2:
+        if audio.shape[0] == 1:
+            return audio[0, :]
+        elif audio.shape[1] == 1:
+            return audio[:, 0]
+
+    raise ValueError(f"Malformed audio: expected mono or simple stereo - ndim: {audio.ndim}, shape: {audio.shape}")
