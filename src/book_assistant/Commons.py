@@ -10,7 +10,8 @@ Commons.py — Shared utilities for BookAssistant.
 import sys
 import time
 import re
-from typing import Callable, Any, Tuple
+import numpy as np
+from typing import Any, Tuple, Callable, Iterable
 
 # When True, debug() calls emit output; set via set_debug().
 debugging = False
@@ -137,20 +138,32 @@ def set_debug(_debug: bool) -> None:
 def measure_time(func: Callable[[], Any]) -> Tuple[Any, float]:
     """Call *func*, measure its wall-clock duration, and return both.
 
-    Uses time.perf_counter_ns() for nanosecond resolution, then converts
-    the elapsed time to seconds for a human-readable result.
-
-    :param func:    a zero-argument callable to time
-    :return:        a (result, elapsed_seconds) tuple where *result* is
-                    whatever *func* returned and *elapsed_seconds* is a float
-    """
-    start  = time.perf_counter_ns()
-    result = func()
-    end    = time.perf_counter_ns()
-    return result, (end - start) / 1_000_000_000
+def set_debug(_debug: bool):
+    global debug
+    debug = _debug
 
 
 def read_dict(filepath: str) -> dict[str, str]:
     with open(filepath, encoding='utf-8') as f:
         return dict((m.group(1).strip(), m.group(2).strip())
-                    for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE) if m.group(1).strip())
+            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE) if m.group(1).strip())
+
+
+def measure_time(func:  Callable[[], Any]) -> Tuple[Any, float]:
+    start = time.perf_counter_ns()
+    result = func()
+    end = time.perf_counter_ns()
+    return result, (end - start) / 1_000_000_000
+
+
+def single_channel(audio: np.ndarray) -> np.ndarray:
+    audio = audio.astype(np.float32)
+    if audio.ndim == 1:
+        return audio
+    if audio.ndim == 2:
+        if audio.shape[0] == 1:
+            return audio[0, :]
+        elif audio.shape[1] == 1:
+            return audio[:, 0]
+
+    raise ValueError(f"Malformed audio: expected mono or simple stereo - ndim: {audio.ndim}, shape: {audio.shape}")
