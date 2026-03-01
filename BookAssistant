@@ -1,0 +1,9 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: © 2026-present Fabius Dieciscudi
+# SPDX-License-Identifier: MIT
+set -euo pipefail
+
+BOOK_ASSISTANT=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+source "$BOOK_ASSISTANT/.venv/bin/activate"
+python "$BOOK_ASSISTANT/src/book_assistant/BookAssistant.py" "$@"
+deactivate
