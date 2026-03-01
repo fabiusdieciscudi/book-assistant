@@ -1,0 +1,54 @@
+# [Luca]:                 Mi chiamo Luca. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Paola]:                Mi chiamo Paola. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Emma]:                 Mi chiamo Emma. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Alice]:                Mi chiamo Alice. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Siri]:                 Mi chiamo Siri. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+#
+# [Riccardo]:             Mi chiamo Riccardo. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+# [Paola2]:               Mi chiamo Paola. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+# [Aurora]:               Mi chiamo Aurora. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+#
+# [Azzurra]:              Mi chiamo Azzurra. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+# [Azzurra, urlando]:     Mi chiamo Azzurra. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+#
+# [Sibilia]:              Mi chiamo Sibilia. Sono una voce narrante. Parlo bene in italiano, ma non inglese, this is a wonderful day, né francese, c'est la vie.
+#
+# [Aiden]:                Mi chiamo Aiden. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Dylan]:                Mi chiamo Dylan. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Eric]:                 Mi chiamo Eric. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Ryan]:                 Mi chiamo Ryan. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Uncle Fu]:             Mi chiamo Uncle Fu. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Ono Anna]:             Mi chiamo Ono Anna. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena]:                 Mi chiamo Serena. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, sospirando]:     Mi chiamo Serena, sospirando. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, seccata]:        Mi chiamo Serena, seccata. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, ironica]:        Mi chiamo Serena, ironica. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, sdegnata]:       Mi chiamo Serena, sdegnata. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, ridendo]:        Mi chiamo Serena, ridendo. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, sussurrando]:    Mi chiamo Serena, sussurrando. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, piangendo]:      Mi chiamo Serena, piangendo. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Serena, sexy]:           Mi chiamo Serena, sexy. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Sohee]:                Mi chiamo Sohee. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Vivian]:               Mi chiamo Vivian. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+
+[Anna]:                 Mi chiamo Anna. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Anna, malinconica]:    Mi chiamo Anna, malinconica. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Anna, sospirando]:     Mi chiamo Anna, sospirando. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Anna, seccata]:        Mi chiamo Anna, seccata. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Anna, ironica]:        Mi chiamo Anna, ironica. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Anna, sdegnata]:       Mi chiamo Anna, sdegnata. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Barbara]:              Mi chiamo Barbara. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Elisa]:                Mi chiamo Elisa. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Fabiana]:              Mi chiamo Fabiana. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Giuliana]:             Mi chiamo Giuliana. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Martina]:              Mi chiamo Martina. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
+[Rosalba]:              Mi chiamo Rosalba. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+
+[Angelo Maggi]:         Mi chiamo Angelo Maggi. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Cesare Barbetti]:      Mi chiamo Cesare Barbetti. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Chiara Catani]:        Mi chiamo Chiara Catani. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Chiara Colizzi]:       Mi chiamo Chiara Colizzi. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Giuseppe Grossi]:      Mi chiamo Giuseppe Grossi. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Luca Ward]:            Mi chiamo Luca Ward. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Saverio Endrio]:       Mi chiamo Saverio Endrio. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+# [Valentina Favazza]:    Mi chiamo Valentina Favazza. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
