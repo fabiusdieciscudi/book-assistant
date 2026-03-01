@@ -64,3 +64,12 @@ class Qwen3TTS(AbstractTTS):
                                                         top_p=0.90,
                                                         speed=1.0)
         return np.asarray(wavs)
+
+
+    def clone_voice(self, audio: str, text: str, pkl_file: str):
+        self._ensure_initialized()
+        debug(f"clone_voice('{audio}', '{text}', '{pkl_file})")
+        voice_prompt = self._model.create_voice_clone_prompt(ref_audio=audio, ref_text=text, x_vector_only_mode=False)
+        with open(pkl_file, "wb") as f:
+            pickle.dump(voice_prompt, f)
+
