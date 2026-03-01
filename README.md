@@ -8,6 +8,7 @@ A command-line toolkit for authors, providing spell checking for `.txt` manuscri
 - **[`echo`](docs/ECHO.md)**                            — flags nearby repetitions of the same word (echoes)
 - **[`stats`](docs/STATS.md)**                          — per-chapter statistics: words, sentences, *cartelle*, readability indexes
 - **[`tts`](docs/TTS.md)**                              — converts text to speech with multi-voice, multi-speaker narration support
+- **[`check-guillemets`](docs/CHECK_GUILLEMETS.md)**    — validates punctuation around guillemets (`«»`) according to Italian typographic conventions
 
 All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
 
@@ -51,6 +52,7 @@ Then call it from anywhere:
 ```bash
 BookAssistant spellcheck my_novel/
 BookAssistant tts chapter01.txt --output chapter01.wav
+BookAssistant check-guillemets chapter01.txt
 ```
 
 Do not move the script: it detects the Python file position by looking at its own directory.
@@ -112,6 +114,18 @@ BookAssistant tts <path> --voices-config voices.cfg --output output.wav
 ```
 
 → See [TTS.md](docs/TTS.md) for full documentation.
+
+---
+
+### `check-guillemets`
+
+Flags suspicious punctuation placement around closing guillemets (`»`).
+
+```bash
+BookAssistant check-guillemets <path>
+```
+
+→ See [CHECK_GUILLEMETS.md](docs/CHECK_GUILLEMETS.md) for full documentation.
 
 ---
 
