@@ -1,0 +1,7 @@
+qwen-tts
+soundfile
+torch
+piper
+numpy
+transformers==4.57.1
+huggingface-hub
