@@ -9,6 +9,7 @@ Commons.py — Shared utilities for BookAssistant.
 
 import sys
 import time
+import re
 from typing import Callable, Any, Tuple
 
 # When True, debug() calls emit output; set via set_debug().
@@ -147,3 +148,9 @@ def measure_time(func: Callable[[], Any]) -> Tuple[Any, float]:
     result = func()
     end    = time.perf_counter_ns()
     return result, (end - start) / 1_000_000_000
+
+
+def read_dict(filepath: str) -> dict[str, str]:
+    with open(filepath, encoding='utf-8') as f:
+        return dict((m.group(1).strip(), m.group(2).strip())
+                    for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE) if m.group(1).strip())
