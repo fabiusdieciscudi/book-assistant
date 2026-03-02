@@ -5,6 +5,7 @@ A command-line toolkit for authors, providing spell checking for `.txt` manuscri
 ## Features
 
 - **[`spellcheck`](docs/SPELLCHECK.md)**                — multilingual spell checking with custom dictionary support
+- **[`echo`](docs/ECHO.md)**                            — flags nearby repetitions of the same word (echoes)
 
 All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
 
@@ -51,10 +52,11 @@ Do not move the script: it detects the Python file position by looking at its ow
 
 ### Global options
 
-| Option      | Description             |
-|-------------|-------------------------|
-| `--debug`   | Enable verbose logging. |
-| `--version` | Print version number.   |
+| Option      | Description                                                  |
+|-------------|--------------------------------------------------------------|
+| `--debug`   | Enable verbose logging.                                      |
+| `--version` | Print version number.                                        |
+| `--dry-run` | Validate input without performing time-expensive operations. |
 
 ---
 
@@ -69,6 +71,18 @@ BookAssistant spellcheck <path> [--dict <dictionary.txt>]
 ```
 
 → See [SPELLCHECK.md](docs/SPELLCHECK.md) for full documentation.
+
+---
+
+### `echo`
+
+Flags *echoes*: the same word repeated within a short distance, a common style issue in narrative prose. Words shorter than four letters and a list of very common Italian words are ignored; words that differ only in their final vowel (e.g. *nuovo*/*nuova*) count as the same word.
+
+```bash
+BookAssistant echo <path> [--window 150] [--no-colour] [--print-all-lines]
+```
+
+→ See [ECHO.md](docs/ECHO.md) for full documentation.
 
 ---
 
