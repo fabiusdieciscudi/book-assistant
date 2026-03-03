@@ -12,37 +12,50 @@ from Commons import debug
 
 CLONE_PROMPT = 'clone'
 
-_SAMPLE_RATE = 24000
+_BASE_MODEL_PT = {
+    'Lite': 'Qwen/Qwen3-TTS-12Hz-0.6B-Base',
+    'Pro':  'Qwen/Qwen3-TTS-12Hz-1.7B-Base'
+}
+
+_CUSTOM_VOICE_MODEL_PT = {
+    'Lite': 'Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice',
+    'Pro':  'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice'
+}
+
+_TYPE_PT = {
+    'Lite': torch.float32,
+    'Pro':  torch.float16
+}
+
 _VOICE_NAMES = ['', 'aiden', 'dylan', 'eric', 'ono_anna', 'ryan', 'serena', 'sohee', 'uncle_fu', 'vivian']
+_SAMPLE_RATE = 24000
 
 class Qwen3TTS(AbstractTTS):
-
-
-    def __init__(self, voice_name: str, language: str):
+    def __init__(self, voice_name: str, language: str, model_size: str = "Pro"):
         super().__init__("Qwen3", voice_name, language, _SAMPLE_RATE)
-        self._voice_name = voice_name
+        self._voice_name = voice_name.lower()
+        self._model_size = model_size
+
         if voice_name == CLONE_PROMPT or voice_name.endswith(".pkl"):
-            self._model_name = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+            self._model_name = _BASE_MODEL_PT[model_size]
 
             if voice_name != CLONE_PROMPT:
                 with open(voice_name, "rb") as f:
                     self._voice_clone_prompt = pickle.load(f)
         else:
-            self._model_name = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+            self._model_name = _CUSTOM_VOICE_MODEL_PT[model_size]
             self._voice_clone_prompt = None
-            if not voice_name in _VOICE_NAMES:
+            if not self._voice_name in _VOICE_NAMES:
                 raise ValueError(f"Unsupported voice: {voice_name} is not in {_VOICE_NAMES}")
-
 
     def _deferred_init(self):
         debug(f"Initializing Qwen3 {self._voice_name} with '{self._model_name}')")
         self._model = Qwen3TTSModel.from_pretrained(
             self._model_name,
             device_map = self._device,
-            dtype = torch.float16,
+            dtype = _TYPE_PT[self._model_size],
             attn_implementation = "sdpa",  # obbligatorio su MPS (no flash_attention)
             local_files_only=True)
-
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self._ensure_initialized()
@@ -65,11 +78,9 @@ class Qwen3TTS(AbstractTTS):
                                                         speed=1.0)
         return np.asarray(wavs)
 
-
     def clone_voice(self, audio: str, text: str, pkl_file: str):
         self._ensure_initialized()
         debug(f"clone_voice('{audio}', '{text}', '{pkl_file})")
         voice_prompt = self._model.create_voice_clone_prompt(ref_audio=audio, ref_text=text, x_vector_only_mode=False)
         with open(pkl_file, "wb") as f:
             pickle.dump(voice_prompt, f)
-

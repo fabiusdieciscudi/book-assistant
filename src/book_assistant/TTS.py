@@ -12,7 +12,6 @@ from typing import Any, BinaryIO
 import librosa
 import numpy as np
 import soundfile as sf
-from sympy.strategies.core import switch
 
 from AbstractTTS import AbstractTTS
 from AzzurraVoiceTTS import AzzurraVoiceTTS
@@ -21,11 +20,12 @@ from MacOSTTS import MacOSTTS
 from PiperTTS import PiperTTS
 from Qwen3TTS import Qwen3TTS
 from SibiliaTTS import SibiliaTTS
+from Qwen3MlxTTS import Qwen3MlxTTS
 
 TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
 _CHAR_TRANSLATIONS = str.maketrans({"’": "'", "…": "...", '“': '"', '”': '"'})
-
+_DEFAULT_PAUSE_LINES: set[str] = {"", "***"}
 
 class TTS:
     """Generates speech."""
@@ -37,6 +37,9 @@ class TTS:
                  output_file_name: str = None,
                  max_lines = 99999,
                  sample_rate = 22050,
+                 new_line_silence_duration = 0.1,
+                 pause_silence_duration = 1,
+                 pause_lines=_DEFAULT_PAUSE_LINES,
                  format: str = "WAV",
                  compression_level = 0,
                  dry_run = False):
@@ -49,6 +52,9 @@ class TTS:
         :param output_file_name:        the name of the file where to store the generated speech (None means stdout)
         :param max_lines:               how many lines of the input file to process
         :param sample_rate:             the sample rate to use
+        :param new_line_silence_duration: the duration of silence to add between two lines
+        :param pause_silence_duration:  the duration of silence to add for pauses
+        :param pause_lines:             the lines that represent a pause in the narration
         :param format:                  the file format (WAV, MP3, ...)
         :param compression_level:       the compression level [0..1)
         :param dry_run:                 whether actual speech rendering is omitted
@@ -60,6 +66,9 @@ class TTS:
         self._output_file_name = output_file_name
         self._max_lines = max_lines
         self._sample_rate = sample_rate
+        self._new_line_silence_duration = new_line_silence_duration
+        self._pause_silence_duration = pause_silence_duration
+        self._pause_lines = pause_lines
         self._format = format
         self._compression_level = compression_level
         self._dry_run = dry_run
@@ -95,7 +104,9 @@ class TTS:
         debug(f"_process_text({tts.prefix()}, '{sentence}', '{instruct}', ...)")
         sentence = sentence.strip()
 
-        if sentence:
+        if sentence in self._pause_lines:
+            waveforms.append(self._silence(self._pause_silence_duration))
+        else:
             instruct_key = f"{tts.prefix()}.{instruct}"
             sentence = self._patched(sentence)
             chunk, seconds = measure_time(lambda: single_channel(tts.generate_single_chunk(sentence, self._instruct_map.get(instruct_key, ""))))
@@ -164,13 +175,14 @@ class TTS:
                         instruct = match.group(2).strip() if match.lastindex >= 2 else "default"
                         line = _SPEAKER_PATTERN.sub('', line).strip()
 
-                    if not speaker in self._tts_name_by_speaker:
-                        raise ValueError(f"Unknown speaker: '{speaker}' - valid values: {','.join(sorted(self._tts_name_by_speaker.keys()))}")
-
-                    tts_name = self._tts_name_by_speaker[speaker]
-
-                    if not tts_name in self._tts_by_name.keys():
-                        raise ValueError(f"Unknown TTS: '{tts_name}' - valid values: {','.join(sorted(self._tts_by_name.keys()))}")
+                    if speaker in self._tts_name_by_speaker:
+                        tts_name = self._tts_name_by_speaker[speaker]
+                        if not tts_name in self._tts_by_name.keys():
+                            raise ValueError(f"Unknown TTS: '{tts_name}' - valid values: {','.join(sorted(self._tts_by_name.keys()))}")
+                    elif speaker in self._tts_by_name:
+                        tts_name = speaker
+                    else:
+                        raise ValueError(f"Unknown speaker: '{speaker}' - valid values: {','.join(sorted(self._tts_name_by_speaker.keys()))} or {','.join(sorted(self._tts_by_name.keys()))}")
 
                     tts = self._tts_by_name[tts_name]
 
@@ -188,6 +200,9 @@ class TTS:
                             for s, sentence in enumerate(sentences, 1):
                                 log(f"{file_name}[ {l: >3}.{s:<2}]: ({count_words(sentence): >3} words): {cyan(sentence)}")
                                 self._process_text(tts, sentence.strip(), instruct, waveforms)
+
+                waveforms.append(self._silence(self._new_line_silence_duration))
+
         return waveforms
 
     def generate_wav_from_file(self, input_file_path: str) -> None:
@@ -263,22 +278,34 @@ def tts_configure(voice_config: str = None,
         "Piper:Paola":    PiperTTS("it_IT-paola-medium", "italian", "rhasspy/piper-voices", "it/it_IT/paola/medium", 22050, "v1.0.0"),
         "Piper:Aurora":   PiperTTS("it_IT-aurora-medium", "italian", "kirys79/piper_italiano", "Aurora", 22050),
 
-        "Qwen3":          Qwen3TTS("", "italian"),
-        "Qwen3:Aiden":    Qwen3TTS("aiden", "italian"),
-        "Qwen3:Dylan":    Qwen3TTS("dylan", "italian"),
-        "Qwen3:Eric":     Qwen3TTS("eric", "italian"),
-        "Qwen3:Ono Anna": Qwen3TTS("ono_anna", "italian"),
-        "Qwen3:Ryan":     Qwen3TTS("ryan", "italian"),
-        "Qwen3:Serena":   Qwen3TTS("serena", "italian"),
-        "Qwen3:Sohee":    Qwen3TTS("sohee", "italian"),
-        "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian"),
-        "Qwen3:Vivian":   Qwen3TTS("vivian", "italian"),
+        "Qwen3":          Qwen3MlxTTS("", "italian"),
+        "Qwen3:Aiden":    Qwen3MlxTTS("aiden", "italian"),
+        "Qwen3:Dylan":    Qwen3MlxTTS("dylan", "italian"),
+        "Qwen3:Eric":     Qwen3MlxTTS("eric", "italian"),
+        "Qwen3:Ono Anna": Qwen3MlxTTS("ono_anna", "italian"),
+        "Qwen3:Ryan":     Qwen3MlxTTS("ryan", "italian"),
+        "Qwen3:Serena":   Qwen3MlxTTS("serena", "italian"),
+        "Qwen3:Sohee":    Qwen3MlxTTS("sohee", "italian"),
+        "Qwen3:Uncle Fu": Qwen3MlxTTS("uncle_fu", "italian"),
+        "Qwen3:Vivian":   Qwen3MlxTTS("vivian", "italian"),
+        # "Qwen3":          Qwen3TTS("", "italian"),
+        # "Qwen3:Aiden":    Qwen3TTS("aiden", "italian"),
+        # "Qwen3:Dylan":    Qwen3TTS("dylan", "italian"),
+        # "Qwen3:Eric":     Qwen3TTS("eric", "italian"),
+        # "Qwen3:Ono Anna": Qwen3TTS("ono_anna", "italian"),
+        # "Qwen3:Ryan":     Qwen3TTS("ryan", "italian"),
+        # "Qwen3:Serena":   Qwen3TTS("serena", "italian"),
+        # "Qwen3:Sohee":    Qwen3TTS("sohee", "italian"),
+        # "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian"),
+        # "Qwen3:Vivian":   Qwen3TTS("vivian", "italian"),
         "AzzurraVoice":   AzzurraVoiceTTS(),
         "Sibilia":        SibiliaTTS(),
     }
 
+    _dump_config("Qwen3_clone_map", qwen3_clone_map)
     for key, value in qwen3_clone_map.items():
-        tts_by_name.update({f"Qwen3:{key}": Qwen3TTS(value, "italian")})
+        if not "@" in key:
+            tts_by_name.update({f"Qwen3:{key}": Qwen3MlxTTS(value, "italian", ref_text=qwen3_clone_map.get(f"{key}@ref", ""))})
 
     return TTS(tts_by_name=tts_by_name,
                tts_name_by_speaker=tts_name_by_speaker,
