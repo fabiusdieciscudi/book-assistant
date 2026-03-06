@@ -18,7 +18,6 @@ from AzzurraVoiceTTS import AzzurraVoiceTTS
 from Commons import count_words, log, read_dict, yellow, cyan, debug, single_channel, measure_time
 from MacOSTTS import MacOSTTS
 from PiperTTS import PiperTTS
-from Qwen3TTS import Qwen3TTS
 from SibiliaTTS import SibiliaTTS
 from Qwen3MlxTTS import Qwen3MlxTTS
 
