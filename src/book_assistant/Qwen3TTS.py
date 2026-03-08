@@ -43,7 +43,7 @@ _TYPE_PT = {
 _VOICE_NAMES = ['', 'aiden', 'dylan', 'eric', 'ono_anna', 'ryan', 'serena', 'sohee', 'uncle_fu', 'vivian']
 _SAMPLE_RATE = 24000
 
-class Qwen3MlxTTS(AbstractTTS):
+class Qwen3TTS(AbstractTTS):
     def __init__(self, voice_name: str, language: str, model_size: str = "Pro", ref_text: str = None):
         super().__init__("Qwen3", voice_name, language, _SAMPLE_RATE, max_words=250)
         self._mlx = platform.system() == "Darwin" and platform.machine() == "arm64"

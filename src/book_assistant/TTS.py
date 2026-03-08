@@ -19,7 +19,7 @@ from Commons import count_words, log, read_dict, yellow, cyan, debug, single_cha
 from MacOSTTS import MacOSTTS
 from PiperTTS import PiperTTS
 from SibiliaTTS import SibiliaTTS
-from Qwen3MlxTTS import Qwen3MlxTTS
+from Qwen3TTS import Qwen3TTS
 
 TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
@@ -277,16 +277,16 @@ def tts_configure(voice_config: str = None,
         "Piper:Paola":    PiperTTS("it_IT-paola-medium", "italian", "rhasspy/piper-voices", "it/it_IT/paola/medium", 22050, "v1.0.0"),
         "Piper:Aurora":   PiperTTS("it_IT-aurora-medium", "italian", "kirys79/piper_italiano", "Aurora", 22050),
 
-        "Qwen3":          Qwen3MlxTTS("", "italian"),
-        "Qwen3:Aiden":    Qwen3MlxTTS("aiden", "italian"),
-        "Qwen3:Dylan":    Qwen3MlxTTS("dylan", "italian"),
-        "Qwen3:Eric":     Qwen3MlxTTS("eric", "italian"),
-        "Qwen3:Ono Anna": Qwen3MlxTTS("ono_anna", "italian"),
-        "Qwen3:Ryan":     Qwen3MlxTTS("ryan", "italian"),
-        "Qwen3:Serena":   Qwen3MlxTTS("serena", "italian"),
-        "Qwen3:Sohee":    Qwen3MlxTTS("sohee", "italian"),
-        "Qwen3:Uncle Fu": Qwen3MlxTTS("uncle_fu", "italian"),
-        "Qwen3:Vivian":   Qwen3MlxTTS("vivian", "italian"),
+        "Qwen3":          Qwen3TTS("", "italian"),
+        "Qwen3:Aiden":    Qwen3TTS("aiden", "italian"),
+        "Qwen3:Dylan":    Qwen3TTS("dylan", "italian"),
+        "Qwen3:Eric":     Qwen3TTS("eric", "italian"),
+        "Qwen3:Ono Anna": Qwen3TTS("ono_anna", "italian"),
+        "Qwen3:Ryan":     Qwen3TTS("ryan", "italian"),
+        "Qwen3:Serena":   Qwen3TTS("serena", "italian"),
+        "Qwen3:Sohee":    Qwen3TTS("sohee", "italian"),
+        "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian"),
+        "Qwen3:Vivian":   Qwen3TTS("vivian", "italian"),
         # "Qwen3":          Qwen3TTS("", "italian"),
         # "Qwen3:Aiden":    Qwen3TTS("aiden", "italian"),
         # "Qwen3:Dylan":    Qwen3TTS("dylan", "italian"),
@@ -304,7 +304,7 @@ def tts_configure(voice_config: str = None,
     _dump_config("Qwen3_clone_map", qwen3_clone_map)
     for key, value in qwen3_clone_map.items():
         if not "@" in key:
-            tts_by_name.update({f"Qwen3:{key}": Qwen3MlxTTS(value, "italian", ref_text=qwen3_clone_map.get(f"{key}@ref", ""))})
+            tts_by_name.update({f"Qwen3:{key}": Qwen3TTS(value, "italian", ref_text=qwen3_clone_map.get(f"{key}@ref", ""))})
 
     return TTS(tts_by_name=tts_by_name,
                tts_name_by_speaker=tts_name_by_speaker,
