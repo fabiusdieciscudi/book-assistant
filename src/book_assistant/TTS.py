@@ -174,6 +174,9 @@ class TTS:
                         instruct = match.group(2).strip() if match.lastindex >= 2 else "default"
                         line = _SPEAKER_PATTERN.sub('', line).strip()
 
+                    speaker_variant = f"{speaker}.{instruct}"
+                    if speaker_variant in self._tts_name_by_speaker:
+                        speaker = speaker_variant
                     if speaker in self._tts_name_by_speaker:
                         tts_name = self._tts_name_by_speaker[speaker]
                         if not tts_name in self._tts_by_name.keys():
