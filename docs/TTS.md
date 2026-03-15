@@ -79,7 +79,6 @@ The following voices are available by name in config files:
 
 ### macOS voices (Italian)
 
-|------------------|-----------------------|
 | Name             | Voice                 |
 |------------------|-----------------------|
 | `MacOS:Federica` | Federica (Premium)    |
@@ -89,21 +88,17 @@ The following voices are available by name in config files:
 | `MacOS:Alice`    | Alice (Enhanced)      |
 | `MacOS:Siri`     | Siri (system default) |
 | Name             | Voice                 |
-|------------------|-----------------------|
 
 ### Piper voices (Italian)
 
-|------------------|----------------------|
 | Name             | Voice                |
 |------------------|----------------------|
 | `Piper:Riccardo` | it_IT-riccardo-x_low |
 | `Piper:Paola`    | it_IT-paola-medium   |
 | `Piper:Aurora`   | it_IT-aurora-medium  |
-|------------------|----------------------|
 
 ### Qwen3 voices (Italian)
 
-|------------------|-----------|
 | Name             | Character |
 |------------------|-----------|
 | `Qwen3`          | Default   |
@@ -116,17 +111,14 @@ The following voices are available by name in config files:
 | `Qwen3:Sohee`    | Sohee     |
 | `Qwen3:Uncle Fu` | Uncle Fu  |
 | `Qwen3:Vivian`   | Vivian    |
-|------------------|-----------|
 
 
 ### Other voices
 
-|----------------|------------------|
 | Name           | Engine           |
 |----------------|------------------|
 | `AzzurraVoice` | AzzurraVoice TTS |
 | `Sibilia`      | Sibilia TTS      |
-|----------------|------------------|
 
 ---
 
@@ -139,10 +131,10 @@ All configuration files are plain text key-value files (one `key = value` per li
 Maps speaker names (as used in `[speaker]:` tags) to voice names:
 
 ```
-Narrator     = Qwen3:Serena
-Beatrice     = Qwen3:Vivian
-Virgilio     = MacOS:Luca
-default      = Qwen3:Serena
+Narrator:   Qwen3:Serena
+Beatrice:   Qwen3:Vivian
+Virgilio:   MacOS:Luca
+default:    Qwen3:Serena
 ```
 
 The special speaker name `default` is used for lines without a speaker tag.
@@ -150,7 +142,7 @@ The special speaker name `default` is used for lines without a speaker tag.
 A speaker+instruct variant can also be mapped directly:
 
 ```
-Virgilio.grave = Qwen3:Uncle Fu
+Virgilio.grave:  Qwen3:Uncle Fu
 ```
 
 This takes precedence over the plain `Virgilio` mapping when the instruct is `grave`.
@@ -160,9 +152,9 @@ This takes precedence over the plain `Virgilio` mapping when the instruct is `gr
 Maps `<voice_prefix>.<instruct>` keys to instruction strings passed to the TTS engine:
 
 ```
-Qwen3.grave    = Speak in a deep, solemn tone.
-Qwen3.whisper  = Speak very softly, almost whispering.
-Qwen3.excited  = Speak with energy and enthusiasm.
+Qwen3.grave:     Speak in a deep, solemn tone.
+Qwen3.whisper:   Speak very softly, almost whispering.
+Qwen3.excited:   Speak with energy and enthusiasm.
 ```
 
 The key prefix must match the TTS engine prefix (e.g. `Qwen3`, `MacOS`, `Piper`).
@@ -172,8 +164,8 @@ The key prefix must match the TTS engine prefix (e.g. `Qwen3`, `MacOS`, `Piper`)
 Defines custom Qwen3 voices cloned from a reference audio file:
 
 ```
-MyVoice       = path/to/reference.wav
-MyVoice@ref   = The reference text spoken in the audio file.
+MyVoice:         path/to/reference.wav
+MyVoice@ref:     The reference text spoken in the audio file.
 ```
 
 This registers the voice as `Qwen3:MyVoice` and makes it available in the voices config like any built-in voice.
@@ -183,8 +175,8 @@ This registers the voice as `Qwen3:MyVoice` and makes it available in the voices
 Substitutions applied to every line before rendering, useful for correcting mispronunciations:
 
 ```
-LOTR     = Lord of the Rings
-J.R.R.   = J R R
+LOTR:           Lord of the Rings
+J.R.R.:         J R R
 ```
 
 Patches are applied in definition order.
@@ -193,20 +185,18 @@ Patches are applied in definition order.
 
 ## Output Formats
 
-|---------------|----------------|
 | Format        | Option         |
 |---------------|----------------|
 | WAV (default) | `--format WAV` |
 | MP3           | `--format MP3` |
-|---------------|----------------|
 
 For MP3, use `--compression` to set the quality level (0–99, default 0 = highest quality).
+There are no advanced options for MP3 generation; if you need them, output a WAV and then use `ffmpeg` to convert it.
 
 ---
 
 ## Options
 
-|-------------------------------|-------------------------------------------------------------|
 | Option                        | Description                                                 |
 |-------------------------------|-------------------------------------------------------------|
 | `--output <file>`             | Output file path. Defaults to stdout.                       |
@@ -219,7 +209,6 @@ For MP3, use `--compression` to set the quality level (0–99, default 0 = highe
 | `--max-lines <n>`             | Stop after processing this many lines (default: all).       |
 | `--dry-run`                   | Validate speaker/voice assignments without rendering audio. |
 | `--debug`                     | Enable verbose logging.                                     |
-|-------------------------------|-------------------------------------------------------------|
 
 ---
 
@@ -227,5 +216,5 @@ For MP3, use `--compression` to set the quality level (0–99, default 0 = highe
 
 - All audio is resampled to a common sample rate (22050 Hz by default) before being concatenated.
 - A short silence is inserted between every line; longer pauses are inserted for blank lines and `***` lines.
-- The input file is always validated (dry run) before rendering begins, so speaker/voice errors are caught upfront.
+- The input file is always validated before rendering begins, so speaker/voice errors are caught upfront.
 - Character translations are applied automatically before rendering: curly quotes become straight quotes, `…` becomes `...`.
