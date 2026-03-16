@@ -192,7 +192,7 @@ class TTS:
                     if not dry_run and (prev_speaker != speaker or prev_instruct != instruct):
                         log(f"Line {l}: Speaker: {yellow(speaker)}, voice: {yellow(tts_name)}, instruct: {yellow(instruct)}")
 
-                    if speaker != "default" and not line[-1] in string.punctuation:
+                    if speaker != "default" and line and not line[-1] in string.punctuation:
                         line = f"{line}."
 
                     if count_words(line) <= tts.max_words():
