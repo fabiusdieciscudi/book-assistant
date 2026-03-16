@@ -1,9 +1,9 @@
+huggingface-hub==0.36.2
 language-tool-python==3.3.0
+mlx_audio
+numpy==2.3.5
+piper-tts==1.3.0
 qwen-tts==0.1.1
 soundfile==0.13.1
 torch==2.10.0
-piper-tts==1.3.0
-numpy==2.3.5
 transformers==4.57.3
-huggingface-hub==0.36.2
-mlx_audio
