@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © 2026-present Fabius Dieciscudi
+# SPDX-License-Identifier: MIT
+
 SHELL := bash
 VENV  := .venv
 BUILD=build
