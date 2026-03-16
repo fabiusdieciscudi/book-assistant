@@ -146,10 +146,16 @@ def measure_time(func: Callable[[], Any]) -> Tuple[Any, float]:
     end = time.perf_counter_ns()
     return result, (end - start) / 1_000_000_000
 
-def read_dict(filepath: str) -> dict[str, str]:
-    with open(filepath, encoding='utf-8') as f:
-        return dict((m.group(1).strip(), m.group(2).strip())
-            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE) if m.group(1).strip())
+def read_dict(file_path: str | Iterable[str]) -> dict[str, str]:
+    result = {}
+
+    for path in [file_path] if isinstance(file_path, str) else sorted(file_path):
+        with open(path, encoding='utf-8') as f:
+            for m in re.finditer(r'^\s*([^#:]+?)\s*:\s*([^#]*?)(?:\s*#.*)?$', f.read(), re.MULTILINE):
+                key = m.group(1).strip()
+                if key:
+                    result[key] = m.group(2).strip()
+    return result
 
 def single_channel(audio: np.ndarray) -> np.ndarray:
     audio = audio.astype(np.float32)
