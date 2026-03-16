@@ -135,6 +135,9 @@ def set_debug(_debug: bool) -> None:
     global debugging
     debugging = _debug
 
+def is_debug() -> bool:
+    return debugging
+
 def measure_time(func: Callable[[], Any]) -> Tuple[Any, float]:
     """Call *func*, measure its wall-clock duration, and return both.
     """
