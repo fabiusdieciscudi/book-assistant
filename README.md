@@ -6,6 +6,7 @@ A command-line toolkit for authors, providing spell checking for `.txt` manuscri
 
 - **[`spellcheck`](docs/SPELLCHECK.md)**                — multilingual spell checking with custom dictionary support
 - **[`echo`](docs/ECHO.md)**                            — flags nearby repetitions of the same word (echoes)
+- **[`stats`](docs/STATS.md)**                          — per-chapter statistics: words, sentences, *cartelle*, readability indexes
 
 All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
 
@@ -83,6 +84,18 @@ BookAssistant echo <path> [--window 150] [--no-colour] [--print-all-lines]
 ```
 
 → See [ECHO.md](docs/ECHO.md) for full documentation.
+
+---
+
+### `stats`
+
+Prints a table of per-chapter statistics: words, sentences, paragraphs, *cartelle* and readability indexes (Gulpease, Coleman-Liau). With a LaTeX `.toc` file, page columns are added too.
+
+```bash
+BookAssistant stats <path> [--latex-toc <book.toc>]
+```
+
+→ See [STATS.md](docs/STATS.md) for full documentation.
 
 ---
 
