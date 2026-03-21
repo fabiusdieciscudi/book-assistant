@@ -4,39 +4,39 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import importlib
 from pathlib import Path
+import book_assistant
+from book_assistant import CommandBase
+from book_assistant.Commons import set_debug, error
+from book_assistant.Version import __version__
 
-from Commons import set_debug, error
-from SpellChecker import SPELLCHECK_COMMAND, spell_check_args, spell_check_run
-from Version import __version__
 
-def process(file_path: str, callback=None):
-    path = Path(file_path).resolve()
-    if not path.exists():
-        error(f"Doesn't exist: {file_path}")
-        return
-    if path.is_file():
-        callback(path)
-    elif path.is_dir():
-        txt_files = sorted(path.rglob("*.txt"))
-        for txt_path in txt_files:
-            callback(txt_path)
+def _load_commands() -> None:
+    """Import every direct subpackage of book_assistant.
+
+    Each subpackage __init__.py is responsible for appending its own
+    command instance to CommandBase.COMMANDS.
+    """
+    pkg_path = Path(book_assistant.__file__).parent
+    for sub in sorted(pkg_path.iterdir()):
+        if sub.is_dir() and (sub / "__init__.py").exists():
+            importlib.import_module(f"book_assistant.{sub.name}")
 
 
 if __name__ == '__main__':
-    commands = [
-        SPELLCHECK_COMMAND,
-    ]
+    _load_commands()
+    command_map: dict[str, CommandBase] = {cmd.name(): cmd for cmd in book_assistant.COMMANDS}
     parser = argparse.ArgumentParser(description="BookAssistant")
-    parser.add_argument("command", choices=commands, help=f"Command: {commands})")
-    parser.add_argument("path", help="File or folder to process (mandatory).")
+    parser.add_argument("command", choices=list(command_map), help="Command to run.")
+    parser.add_argument("path", help="File or folder to process.")
     parser.add_argument("--version", action="version", version=f"BookAssistant {__version__}")
     parser.add_argument("--debug", action="store_true", default=False, help="Verbose logging.")
+    parser.add_argument("--dry-run", action="store_true", default=False, help="Validate without time-expensive operations.")
 
-    spell_check_args(parser)
+    for command in command_map.values():
+        command.process_args(parser)
 
     args = parser.parse_args()
     set_debug(args.debug)
-
-    if args.command == SPELLCHECK_COMMAND:
-        process(args.path, spell_check_run(args))
+    command_map[args.command].run(args)

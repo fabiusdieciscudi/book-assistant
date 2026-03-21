@@ -3,4 +3,6 @@
 # SPDX-FileCopyrightText: © 2026-present Fabius Dieciscudi
 # SPDX-License-Identifier: MIT
 
-COMMANDS: list = []
+from book_assistant import COMMANDS
+from .SpellCheckerCommand import SpellCheckerCommand
+COMMANDS.append(SpellCheckerCommand())
