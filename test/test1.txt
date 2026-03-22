@@ -52,4 +52,16 @@
 [Giuseppe Grossi]:      Mi chiamo Giuseppe Grossi. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [Luca Ward]:            Mi chiamo Luca Ward. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [Saverio Endrio]:       Mi chiamo Saverio Endrio. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Paolo Buglioni]:       Mi chiamo Paolo Buglioni. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [Valentina Favazza]:    Mi chiamo Valentina Favazza. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+
+[CML.166]:              Mi chiamo Siemèl uno-sei-sei. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.1989]:             Mi chiamo Siemèl uno-nove-otto-nove. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.4649]:             Mi chiamo Siemèl quattro-sei-quattro-nove. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.6744]:             Mi chiamo Siemèl sei-sette-quattro-quattro. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.7405]:             Mi chiamo Siemèl sette-quattro-zero-cinque. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.7444]:             Mi chiamo Siemèl sette-quattro-quattro-quattro. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.8181]:             Mi chiamo Siemèl otto-uno-otto-uno. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.9657]:             Mi chiamo Siemèl nove-sei-cinque-sette. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.12804]:            Mi chiamo Siemèl uno-due-otto-zero-quattro. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[CML.13092]:            Mi chiamo Siemèl uno-tre-zero-nove-due. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
