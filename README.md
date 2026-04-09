@@ -17,8 +17,7 @@ All commands accept either a single `.txt` file or a folder. When given a folder
 ```bash
 git clone https://github.com/fabiusdieciscudi/book-assistant.git
 cd book-assistant
-make venv-init venv-activate
-make pip-install
+make venv-prepare
 ```
 
 The `spellcheck` command requires the `JAVA17_HOME` environment variable to point to a Java 17 or newer installation. 
