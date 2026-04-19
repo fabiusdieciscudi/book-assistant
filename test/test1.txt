@@ -31,6 +31,15 @@
 [Sohee]:                Mi chiamo Sohee. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [Vivian]:               Mi chiamo Vivian. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 
+[Bella]:                Mi chiamo Bella. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Jasper]:               Mi chiamo Jasper. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Luna]:                 Mi chiamo Luna. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Bruno]:                Mi chiamo Bruno. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Rosie]:                Mi chiamo Rosie. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Hugo]:                 Mi chiamo Hugo. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Kiki]:                 Mi chiamo Kiki. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Leo]:                  Mi chiamo Leo. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+
 [Anna]:                 Mi chiamo Anna. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
 [Anna, malinconica]:    Mi chiamo Anna, malinconica. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.
 [Anna, sospirando]:     Mi chiamo Anna, sospirando. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, ma non francese, c'est la vie.

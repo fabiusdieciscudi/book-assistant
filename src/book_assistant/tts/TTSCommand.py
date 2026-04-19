@@ -126,6 +126,15 @@ class TTSCommand(CommandBase):
             "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian"),
             "Qwen3:Vivian":   Qwen3TTS("vivian",   "italian"),
 
+            # "Kitten:Bella":   KittenTTS("Bella",  "italian"),
+            # "Kitten:Jasper":  KittenTTS("Jasper", "italian"),
+            # "Kitten:Luna":    KittenTTS("Luna", "italian"),
+            # "Kitten:Bruno":   KittenTTS("Bruno", "italian"),
+            # "Kitten:Rosie":   KittenTTS("Rosie", "italian"),
+            # "Kitten:Hugo":    KittenTTS("Hugo", "italian"),
+            # "Kitten:Kiki":    KittenTTS("Kiki", "italian"),
+            # "Kitten:Leo":     KittenTTS("Leo", "italian"),
+
             "AzzurraVoice":   AzzurraVoiceTTS(),
 
             "Sibilia":        SibiliaTTS(),
