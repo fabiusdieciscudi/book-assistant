@@ -1,6 +1,6 @@
 # BookAssistant
 
-A command-line toolkit for authors, providing spell checking, typographic validation, and text-to-speech rendering for `.txt` manuscript files.
+A command-line toolkit for authors, providing spell checking for `.txt` manuscript files.
 
 ## Features
 
