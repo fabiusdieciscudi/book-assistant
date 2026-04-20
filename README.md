@@ -7,6 +7,7 @@ A command-line toolkit for authors, providing spell checking for `.txt` manuscri
 - **[`spellcheck`](docs/SPELLCHECK.md)**                — multilingual spell checking with custom dictionary support
 - **[`echo`](docs/ECHO.md)**                            — flags nearby repetitions of the same word (echoes)
 - **[`stats`](docs/STATS.md)**                          — per-chapter statistics: words, sentences, *cartelle*, readability indexes
+- **[`tts`](docs/TTS.md)**                              — converts text to speech with multi-voice, multi-speaker narration support
 
 All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
 
@@ -29,6 +30,8 @@ This is because it uses [LanguageTool](https://languagetool.org/), whose engine 
 export JAVA17_HOME=/path/to/java17
 ```
 
+The `tts` command renders voices locally. Models are downloaded from HuggingFace on first use and cached locally (several GB for the neural voices); later runs work offline. On Apple Silicon Macs, Qwen3 and Voxtral voices run on MLX; on other platforms Qwen3 uses PyTorch and Voxtral is not available. The `MacOS:*` voices use the system `say` command and require macOS.
+
 ## Usage
 
 Use the provided wrapper script, which activates the virtual environment automatically:
@@ -47,6 +50,7 @@ Then call it from anywhere:
 
 ```bash
 BookAssistant spellcheck my_novel/
+BookAssistant tts chapter01.txt --output chapter01.wav
 ```
 
 Do not move the script: it detects the Python file position by looking at its own directory.
@@ -96,6 +100,18 @@ BookAssistant stats <path> [--latex-toc <book.toc>]
 ```
 
 → See [STATS.md](docs/STATS.md) for full documentation.
+
+---
+
+### `tts`
+
+Renders text to a WAV or MP3 file. Supports speaker tags for multi-character narration, voice instructions, and word-level pronunciation patches.
+
+```bash
+BookAssistant tts <path> --voices-config voices.cfg --output output.wav
+```
+
+→ See [TTS.md](docs/TTS.md) for full documentation.
 
 ---
 
