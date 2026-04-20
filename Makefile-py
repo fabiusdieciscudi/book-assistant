@@ -23,7 +23,9 @@ pip-install-tools:
 	source $(VENV)/bin/activate && pip install pip-tools pip-audit
 
 pip-install:
+	source $(VENV)/bin/activate && yes | pip uninstall qwen-tts
 	source $(VENV)/bin/activate && pip install -r requirements.txt --require-hashes
+	source $(VENV)/bin/activate && pip install --no-deps qwen-tts==0.1.1
 	source $(VENV)/bin/activate && pip install -e .
 
 pip-compile:
