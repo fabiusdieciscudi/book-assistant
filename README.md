@@ -9,8 +9,9 @@ A command-line toolkit for authors, providing spell checking for `.txt` manuscri
 - **[`stats`](docs/STATS.md)**                          — per-chapter statistics: words, sentences, *cartelle*, readability indexes
 - **[`tts`](docs/TTS.md)**                              — converts text to speech with multi-voice, multi-speaker narration support
 - **[`check-guillemets`](docs/CHECK_GUILLEMETS.md)**    — validates punctuation around guillemets (`«»`) according to Italian typographic conventions
+- **[`html2txt`](docs/HTML2TXT.md)**                    — converts XHTML chapters (e.g. from TeX4ht) to plain `.txt`
 
-All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
+All commands accept either a single file or a folder. Most of them operate on `.txt` files; the exception is `html2txt`, which operates on `.html` files. When given a folder, all matching files within it (including subdirectories) are processed in alphabetical order.
 
 ---
 
@@ -126,6 +127,18 @@ BookAssistant check-guillemets <path>
 ```
 
 → See [CHECK_GUILLEMETS.md](docs/CHECK_GUILLEMETS.md) for full documentation.
+
+---
+
+### `html2txt`
+
+Converts XHTML files (for instance chapters produced by TeX4ht/make4ht from LaTeX sources) to plain text, one paragraph per line.
+
+```bash
+BookAssistant html2txt <path> [--output <file-or-folder>]
+```
+
+→ See [HTML2TXT.md](docs/HTML2TXT.md) for full documentation.
 
 ---
 
