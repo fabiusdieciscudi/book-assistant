@@ -1,14 +1,15 @@
 # BookAssistant
 
-A command-line toolkit for authors, providing spell checking, typographic validation, and text-to-speech rendering for `.txt` manuscript files.
+A command-line toolkit for authors, providing spell checking, typographic validation, text-to-speech rendering, and illustration cleanup for `.txt` manuscript files and their accompanying `.png` artwork.
 
 ## Features
 
 - **[`spellcheck`](docs/SPELLCHECK.md)**                — multilingual spell checking with custom dictionary support
 - **[`check-guillemets`](docs/CHECK_GUILLEMETS.md)**    — validates punctuation around guillemets (`«»`) according to Italian typographic conventions
 - **[`tts`](docs/TTS.md)**                              — converts text to speech with multi-voice, multi-speaker narration support
+- **[`fix-transparency`](docs/FIX-TRANSPARENCY.md)**    — removes grey-halo artefacts from PNG illustrations caused by near-transparent alpha residue
 
-All commands accept either a single `.txt` file or a folder. When given a folder, all `.txt` files within it (including subdirectories) are processed in alphabetical order.
+All commands accept either a single `.txt` file or a folder, except `fix-transparency`, which operates on `.png` files instead. When given a folder, all matching files within it (including subdirectories) are processed in alphabetical order.
 
 ---
 
@@ -22,7 +23,7 @@ cd book-assistant
 make venv-prepare
 ```
 
-The `spellcheck` command requires the `JAVA17_HOME` environment variable to point to a Java 17 or newer installation. 
+The `spellcheck` command requires the `JAVA17_HOME` environment variable to point to a Java 17 or newer installation.
 This is because it uses [LanguageTool](https://languagetool.org/), whose engine is written in Java.
 
 ```bash
@@ -98,6 +99,18 @@ BookAssistant  tts <path> --voices-config voices.cfg --output output.wav
 ```
 
 → See [TTS.md](docs/TTS.md) for full documentation.
+
+---
+
+### `fix-transparency`
+
+Removes grey-halo artefacts from PNG illustrations caused by near-transparent alpha residue (a common side effect of exporting fine-line artwork from some image editors).
+
+```bash
+BookAssistant fix-transparency <path> [--threshold 30] [--output fixed.png]
+```
+
+→ See [FIX-TRANSPARENCY.md](docs/FIX-TRANSPARENCY.md) for full documentation.
 
 ---
 
