@@ -21,6 +21,8 @@ from .MacOSTTS import MacOSTTS
 from .PiperTTS import PiperTTS
 from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
+from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model
+from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
 
 _TTS_COMMAND = "tts"
@@ -36,6 +38,46 @@ def _dump_config(name: str, config: dict) -> None:
             debug(f"    {key: >30} -> {config[key]}")
 
 
+def _parse_qwen3_params(raw: list[str] | None) -> Qwen3Params:
+    """Parses ``--qwen3-params`` CLI values into a :class:`Qwen3Params`.
+
+    Each item in *raw* is a ``key:value`` string, e.g. ``temperature:0.9``.
+    The special value ``audiobook`` expands to :data:`AUDIOBOOK_PARAMS`.
+    Unknown keys raise :class:`ValueError`.
+
+    Examples::
+
+        --qwen3-params audiobook
+        --qwen3-params temperature:0.9 --qwen3-params repetition_penalty:1.05
+    """
+    if not raw:
+        return Qwen3Params()
+
+    # Flatten in case multiple --qwen3-params flags each carry a list
+    items = []
+    for entry in raw:
+        items.extend(entry.split())
+
+    if "audiobook" in items:
+        return AUDIOBOOK_PARAMS
+
+    _INT_FIELDS   = {"top_k", "subtalker_top_k", "max_tokens"}
+    _FLOAT_FIELDS = {"temperature", "top_p", "repetition_penalty",
+                     "subtalker_temperature", "subtalker_top_p", "speed"}
+    _ALL_FIELDS   = _INT_FIELDS | _FLOAT_FIELDS
+
+    kwargs = {}
+    for item in items:
+        if ":" not in item:
+            raise ValueError(f"--qwen3-params: expected 'key:value', got '{item}'")
+        key, _, val = item.partition(":")
+        if key not in _ALL_FIELDS:
+            raise ValueError(f"--qwen3-params: unknown key '{key}'. Valid: {sorted(_ALL_FIELDS)}")
+        kwargs[key] = int(val) if key in _INT_FIELDS else float(val)
+
+    return Qwen3Params(**kwargs)
+
+
 class TTSCommand(CommandBase):
 
     def __init__(self):
@@ -46,7 +88,9 @@ class TTSCommand(CommandBase):
         parser.add_argument("--voices-config",                default=None, action="append", help="Multi voice configuration")
         parser.add_argument("--instruct-config",              default=None, action="append", help="Voice instruct configuration")
         parser.add_argument("--qwen3-clone-config",           default=None, action="append", help="Configuration for Qwen3 cloned voices")
+        parser.add_argument("--qwen3-model-config",           default=None, action="append", help="Extra CustomVoice-compatible Qwen3 checkpoints (name: HF repo_id)")
         parser.add_argument("--word-patches",                 default=None, action="append", help="Word patches")
+        parser.add_argument("--qwen3-params",                 default=None, action="append", help="Qwen3 generation parameters (key:value, e.g. temperature:0.9)")
         parser.add_argument("--max-lines",          type=int, default=99999,                 help="Max. number of lines to process")
         parser.add_argument("--max-loaded-models",  type=int, default=5,                     help="Max. number of models to keep in memory")
         parser.add_argument("--format",                       default="WAV",                 help="Output file format (default: WAV)")
@@ -57,6 +101,8 @@ class TTSCommand(CommandBase):
         self._setup(voice_config=args.voices_config,
                     instruct_config=args.instruct_config,
                     qwen3_clone_config=args.qwen3_clone_config,
+                    qwen3_model_config=args.qwen3_model_config,
+                    qwen3_params=args.qwen3_params,
                     word_patches=args.word_patches,
                     output=args.output,
                     format=args.format,
@@ -74,6 +120,8 @@ class TTSCommand(CommandBase):
                voice_config=None,
                instruct_config=None,
                qwen3_clone_config=None,
+               qwen3_model_config=None,
+               qwen3_params=None,
                word_patches=None,
                output=None,
                format="WAV",
@@ -95,10 +143,13 @@ class TTSCommand(CommandBase):
         self._dry_run             = dry_run
 
         qwen3_clone_map = read_dict(qwen3_clone_config) if qwen3_clone_config else {}
-        _dump_config("Voice config",    self._tts_name_by_speaker)
-        _dump_config("Instruct config", self._instruct_map)
-        _dump_config("Word patches",    self._word_patches_map)
-        _dump_config("Qwen3 clone map", qwen3_clone_map)
+        qwen3_model_map = read_dict(qwen3_model_config) if qwen3_model_config else {}
+        q3params = _parse_qwen3_params(qwen3_params)
+        _dump_config("Voice config",       self._tts_name_by_speaker)
+        _dump_config("Instruct config",    self._instruct_map)
+        _dump_config("Word patches",       self._word_patches_map)
+        _dump_config("Qwen3 clone map",    qwen3_clone_map)
+        _dump_config("Qwen3 model map",    qwen3_model_map)
 
         tts_by_name = {
             "MacOS:Federica": MacOSTTS("Federica (Premium)", "italian"),
@@ -112,25 +163,47 @@ class TTSCommand(CommandBase):
             "Piper:Paola":    PiperTTS("it_IT-paola-medium",   "italian", "rhasspy/piper-voices", "it/it_IT/paola/medium",   22050, "v1.0.0"),
             "Piper:Aurora":   PiperTTS("it_IT-aurora-medium",  "italian", "kirys79/piper_italiano", "Aurora", 22050),
 
-            "Qwen3":          Qwen3TTS("",         "italian"),
-            "Qwen3:Aiden":    Qwen3TTS("aiden",    "italian"),
-            "Qwen3:Dylan":    Qwen3TTS("dylan",    "italian"),
-            "Qwen3:Eric":     Qwen3TTS("eric",     "italian"),
-            "Qwen3:Ono Anna": Qwen3TTS("ono_anna", "italian"),
-            "Qwen3:Ryan":     Qwen3TTS("ryan",     "italian"),
-            "Qwen3:Serena":   Qwen3TTS("serena",   "italian"),
-            "Qwen3:Sohee":    Qwen3TTS("sohee",    "italian"),
-            "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian"),
-            "Qwen3:Vivian":   Qwen3TTS("vivian",   "italian"),
+            "Qwen3":          Qwen3TTS("",         "italian", params=q3params),
+            "Qwen3:Aiden":    Qwen3TTS("aiden",    "italian", params=q3params),
+            "Qwen3:Dylan":    Qwen3TTS("dylan",    "italian", params=q3params),
+            "Qwen3:Eric":     Qwen3TTS("eric",     "italian", params=q3params),
+            "Qwen3:Ono Anna": Qwen3TTS("ono_anna", "italian", params=q3params),
+            "Qwen3:Ryan":     Qwen3TTS("ryan",     "italian", params=q3params),
+            "Qwen3:Serena":   Qwen3TTS("serena",   "italian", params=q3params),
+            "Qwen3:Sohee":    Qwen3TTS("sohee",    "italian", params=q3params),
+            "Qwen3:Uncle Fu": Qwen3TTS("uncle_fu", "italian", params=q3params),
+            "Qwen3:Vivian":   Qwen3TTS("vivian",   "italian", params=q3params),
+            "Qwen3:Design":   Qwen3TTS("design",   "italian", params=q3params),
 
             "AzzurraVoice":   AzzurraVoiceTTS(),
 
             "Sibilia":        SibiliaTTS(),
+
+            # Voxtral-4B-TTS-2603 (Mistral, CC BY-NC 4.0 — personal use only)
+            # Italian preset voices
+            "Voxtral:Male":           VoxtralTTS("it_male",   "italian"),
+            "Voxtral:Female":         VoxtralTTS("it_female", "italian"),
+            # French preset voices — useful for cross-lingual generation:
+            "Voxtral:FrMale":         VoxtralTTS("fr_male",   "french"),
+            "Voxtral:FrFemale":       VoxtralTTS("fr_female", "french"),
+            # English presets
+            "Voxtral:CasualMale":     VoxtralTTS("casual_male",     "english"),
+            "Voxtral:CasualFemale":   VoxtralTTS("casual_female",   "english"),
+            "Voxtral:NeutralMale":    VoxtralTTS("neutral_male",    "english"),
+            "Voxtral:NeutralFemale":  VoxtralTTS("neutral_female",  "english"),
+            "Voxtral:Cheerful":       VoxtralTTS("cheerful_female", "english"),
         }
 
         for key, value in qwen3_clone_map.items():
             if "@" not in key:
-                tts_by_name[f"Qwen3:{key}"] = Qwen3TTS(value, "italian", ref_text=qwen3_clone_map.get(f"{key}@ref", ""))
+                tts_by_name[f"Qwen3:{key}"] = Qwen3TTS(value, "italian", ref_text=qwen3_clone_map.get(f"{key}@ref", ""), params=q3params)
+
+        for key, repo_id in qwen3_model_map.items():
+            # Registers a fine-tuned, CustomVoice-API-compatible checkpoint
+            # (e.g. an Italian-expressive fine-tune) under a new model_size
+            # key, and exposes it as "Qwen3:<key>" using the default speaker.
+            register_custom_voice_model(key, pt_repo=repo_id, mlx_repo=repo_id)
+            tts_by_name[f"Qwen3:{key}"] = Qwen3TTS("", "italian", model_size=key, params=q3params)
 
         self._tts_by_name = LRUModelCache(tts_by_name, capacity=max_loaded_models)
 
@@ -183,14 +256,68 @@ class TTSCommand(CommandBase):
                     waveforms.append(self._silence(pause))
 
     def _patched(self, sentence: str) -> str:
-        """Patches a sentence by using the word_patches_map.
+        """Patch *sentence* using the word-patches map.
+
+        Each key is replaced only where it stands as a whole token, i.e.
+        where it is not flanked by a letter. This stops a French
+        'Michel' -> 'Miscèl' patch from turning the Italian 'Michele'
+        into 'Miscèle'. A boundary is anything that is not a letter:
+        punctuation, whitespace, digits or a string edge. Accented
+        letters (à, è, ç, ...) count as letters, so an adjacent accent
+        still blocks the match.
+
+        Keys may span several words or whole foreign phrases; any run of
+        whitespace inside a key matches any run of whitespace in the text
+        (so 'detti seguito' still matches across a double space or a line
+        break). Matching is case-sensitive and every pair is applied
+        independently in a single left-to-right pass, so a substitution's
+        output is never re-matched by another key.
 
         :param sentence:                the sentence
         :return:                        the patched sentence
         """
-        for key, value in self._word_patches_map.items():
-            sentence = sentence.replace(key, value)
-        return sentence
+        if not self._word_patches_map:
+            return sentence
+        pattern = self._word_patches_pattern()
+        return pattern.sub(
+            lambda m: self._word_patches_groups[m.lastgroup], sentence
+        )
+
+    def _word_patches_pattern(self):
+        """Return the compiled alternation for the patch map, built once.
+
+        Each key becomes a named group whose body escapes the literal text
+        but turns every internal whitespace run into '\\s+', so multi-word
+        keys (or whole foreign phrases) tolerate any spacing in the text --
+        a plain space, a double space, a line break or a non-breaking space.
+        The replacement is fetched by the matched group's name rather than
+        by the matched text, so it stays correct whatever the real spacing
+        was. Keys are sorted longest-first so a longer key wins over one
+        that is a prefix of it (e.g. 'Michelangelo' before 'Michel'). The
+        outer lookarounds assert the match is not flanked by a Unicode
+        letter -- [^\\W\\d_] means 'a letter': Unicode-aware (so à/è/ç
+        count), digits and '_' do not. Compiled lazily on first use and
+        cached, together with a group-name -> replacement map for lookups.
+        """
+        pattern = getattr(self, "_word_patches_re", None)
+        if pattern is None:
+            import re
+            letter = r"[^\W\d_]"
+            self._word_patches_groups = {}
+            parts = []
+            keys = sorted(self._word_patches_map, key=len, reverse=True)
+            for index, key in enumerate(keys):
+                tokens = key.split()
+                if not tokens:
+                    continue
+                name = f"wp{index}"
+                self._word_patches_groups[name] = self._word_patches_map[key]
+                body = r"\s+".join(re.escape(token) for token in tokens)
+                parts.append(f"(?P<{name}>{body})")
+            alternation = "|".join(parts)
+            pattern = re.compile(rf"(?<!{letter})(?:{alternation})(?!{letter})")
+            self._word_patches_re = pattern
+        return pattern
 
     def _silence(self, duration: float) -> np.ndarray:
         """Generates a silence waveform.

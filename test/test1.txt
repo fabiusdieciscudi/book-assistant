@@ -65,3 +65,14 @@
 [CML.9657]:             Mi chiamo Siemèl nove-sei-cinque-sette. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [CML.12804]:            Mi chiamo Siemèl uno-due-otto-zero-quattro. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
 [CML.13092]:            Mi chiamo Siemèl uno-tre-zero-nove-due. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+
+[Voxtral.Male]:         Mi chiamo Voxtral Male. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.Female]:       Mi chiamo Voxtral:Female. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.FrMale]:       Mi chiamo Voxtral:FrMale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.FrFemale]:     Mi chiamo Voxtral:FrFemale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.CasualMale]:   Mi chiamo Voxtral:CasualMale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.CasualFemale]: Mi chiamo Voxtral:CasualFemale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.NeutralMale]:  Mi chiamo Voxtral:NeutralMale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.NeutralFemale]:Mi chiamo Voxtral:NeutralFemale. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+[Voxtral.Cheerful]:     Mi chiamo Voxtral.Cheerful. Sono una voce narrante. Parlo bene in italiano, ma anche inglese, this is a wonderful day, e francese, c'est la vie.
+

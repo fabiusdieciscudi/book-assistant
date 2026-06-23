@@ -75,7 +75,7 @@ Lines exceeding a voice's word limit are automatically split on sentence boundar
 
 ## Voices
 
-The following voices are available by name in config files:
+The following voices are available by name in config files.
 
 ### macOS voices (Italian)
 
@@ -87,7 +87,6 @@ The following voices are available by name in config files:
 | `MacOS:Emma`     | Emma (Premium)        |
 | `MacOS:Alice`    | Alice (Enhanced)      |
 | `MacOS:Siri`     | Siri (system default) |
-| Name             | Voice                 |
 
 ### Piper voices (Italian)
 
@@ -98,6 +97,8 @@ The following voices are available by name in config files:
 | `Piper:Aurora`   | it_IT-aurora-medium  |
 
 ### Qwen3 voices (Italian)
+
+Neural voices running locally via MLX (Apple Silicon) or PyTorch. See [Qwen3 Generation Parameters](#qwen3-generation-parameters) for tuning options.
 
 | Name             | Character |
 |------------------|-----------|
@@ -112,7 +113,6 @@ The following voices are available by name in config files:
 | `Qwen3:Uncle Fu` | Uncle Fu  |
 | `Qwen3:Vivian`   | Vivian    |
 
-
 ### Other voices
 
 | Name           | Engine           |
@@ -124,7 +124,7 @@ The following voices are available by name in config files:
 
 ## Configuration Files
 
-All configuration files are plain text key-value files (one `key = value` per line, loaded via `read_dict`). Multiple files of the same type can be provided and are merged in order.
+All configuration files are plain text key-value files (one `key: value` per line). Multiple files of the same type can be provided and are merged in order.
 
 ### Voices config (`--voices-config`)
 
@@ -183,6 +183,75 @@ Patches are applied in definition order.
 
 ---
 
+## Qwen3 Generation Parameters
+
+The `--qwen3-params` flag controls how the Qwen3 model samples audio tokens. It applies uniformly to all Qwen3 voices in the session, including cloned voices.
+
+### Quick start: the `audiobook` preset
+
+```bash
+python BookAssistant.py tts chapter.txt --qwen3-params audiobook --output chapter.wav
+```
+
+This is the recommended starting point for narration. It enables sampling with community-tested values:
+
+| Parameter            | Value   |
+|----------------------|---------|
+| `temperature`        | 0.9     |
+| `top_p`              | 1.0     |
+| `top_k`              | 50      |
+| `repetition_penalty` | 1.05    |
+
+### Individual parameters
+
+Parameters can be set individually using `key:value` pairs:
+
+```bash
+python BookAssistant.py tts chapter.txt \
+    --qwen3-params temperature:0.8 \
+    --qwen3-params repetition_penalty:1.05 \
+    --output chapter.wav
+```
+
+#### Talker parameters (semantic stage)
+
+These control the first stage of generation, which converts text into prosody and rhythm tokens.
+
+| Key                  | Type  | Description                                                                                                                                                                                                                                                                   agar         |
+|----------------------|-------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `temperature`        | float | Sampling temperature. Lower values (e.g. `0.3`) produce more predictable, monotone speech; higher values (e.g. `1.2`) add expressiveness but risk instability. `0.9` is a good starting point. Without this flag, the model defaults to greedy (deterministic) decoding for preset voices. |
+| `top_p`              | float | Nucleus sampling threshold. Only tokens whose cumulative probability reaches this value are considered. `1.0` disables filtering; `0.9` trims the long tail of unlikely tokens.                                                                                                            |
+| `top_k`              | int   | Limits sampling to the top-k most probable tokens at each step. `50` is a typical value.                                                                                                                                                                                                   |
+| `repetition_penalty` | float | Penalises recently generated tokens, reducing the chance of repeated syllables or stuck loops. `1.05`–`1.1` is recommended; `1.0` disables it.                                                                                                                                             |
+| `max_tokens`         | int   | Maximum number of tokens the model may generate for a single chunk. Rarely needs changing; the default is 2048.                                                                                                                                                                            |
+
+#### SubTalker parameters (acoustic stage)
+
+Qwen3-TTS has a second stage that converts semantic tokens into acoustic tokens. By default it mirrors the talker settings above. Override only if you want the two stages to behave differently.
+
+| Key                     | Type  | Description                                    |
+|-------------------------|-------|------------------------------------------------|
+| `subtalker_temperature` | float | Temperature for the acoustic stage only.       |
+| `subtalker_top_p`       | float | Nucleus threshold for the acoustic stage only. |
+| `subtalker_top_k`       | int   | Top-k for the acoustic stage only.             |
+
+#### Speed (MLX backend only)
+
+| Key     | Type  | Description                                                                                      |
+|---------|-------|--------------------------------------------------------------------------------------------------|
+| `speed` | float | Playback speed multiplier. `1.0` is normal; `1.2` is 20% faster. Ignored on the PyTorch backend. |
+
+### Notes on sampling
+
+When no `--qwen3-params` flag is given, the behaviour depends on the voice type:
+
+- **Preset voices** (`Qwen3:Serena`, etc.): greedy decoding — deterministic but tends to sound flat.
+- **Cloned voices** (`.wav` / `.pkl`): the PyTorch backend uses sampling with `temperature=0.65, top_p=0.90` by default; the MLX backend defers to the library default.
+
+Passing any sampling parameter (e.g. `temperature:0.9`) switches all Qwen3 voices to sampling mode for that session.
+
+---
+
 ## Output Formats
 
 | Format        | Option         |
@@ -191,31 +260,33 @@ Patches are applied in definition order.
 | MP3           | `--format MP3` |
 
 For MP3, use `--compression` to set the quality level (0–99, default 0 = highest quality).
-There are no advanced options for MP3 generation; if you need them, output a WAV and then use `ffmpeg` to convert it.
+If you need more advanced encoding options, output a WAV and convert with `ffmpeg`.
 
 ---
 
 ## Options
 
-| Option                         | Description                                                 |
-|--------------------------------|-------------------------------------------------------------|
-| `--output <file>`              | Output file path. Defaults to stdout.                       |
-| `--format <fmt>`               | Output format: `WAV` or `MP3` (default: `WAV`).             |
-| `--compression <n>`            | Compression level 0–99 for MP3 (default: `0`).              |
-| `--voices-config <file>`       | Speaker-to-voice mapping. Repeatable.                       |
-| `--instruct-config <file>`     | Voice instruction mapping. Repeatable.                      |
-| `--qwen3-clone-config <file>`  | Qwen3 cloned voice definitions. Repeatable.                 |
-| `--word-patches <file>`        | Word-level pronunciation patches. Repeatable.               |
-| `--max-loaded-models`          | The maximum number of voices in memory at the same time.    | 
-| `--max-lines <n>`              | Stop after processing this many lines (default: all).       |
-| `--dry-run`                    | Validate speaker/voice assignments without rendering audio. |
-| `--debug`                      | Enable verbose logging.                                     |
+| Option                          | Description                                                             |
+|---------------------------------|-------------------------------------------------------------------------|
+| `--output <file>`               | Output file path. Defaults to stdout.                                   |
+| `--format <fmt>`                | Output format: `WAV` or `MP3` (default: `WAV`).                         |
+| `--compression <n>`             | Compression level 0–99 for MP3 (default: `0`).                          |
+| `--voices-config <file>`        | Speaker-to-voice mapping. Repeatable.                                   |
+| `--instruct-config <file>`      | Voice instruction mapping. Repeatable.                                  |
+| `--qwen3-clone-config <file>`   | Qwen3 cloned voice definitions. Repeatable.                             |
+| `--qwen3-params <key:value>`    | Qwen3 generation parameter or `audiobook` preset. Repeatable.           |
+| `--word-patches <file>`         | Word-level pronunciation patches. Repeatable.                           |
+| `--max-loaded-models <n>`       | Maximum number of voices to keep in memory simultaneously (default: 5). |
+| `--max-lines <n>`               | Stop after processing this many lines (default: all).                   |
+| `--dry-run`                     | Validate speaker/voice assignments without rendering audio.             |
+| `--debug`                       | Enable verbose logging.                                                 |
 
 ---
 
 ## Notes
 
-- All audio is resampled to a common sample rate (22050 Hz by default) before being concatenated.
+- All audio is resampled to a common sample rate (22050 Hz) before being concatenated.
 - A short silence is inserted between every line; longer pauses are inserted for blank lines and `***` lines.
 - The input file is always validated before rendering begins, so speaker/voice errors are caught upfront.
-- Character translations are applied automatically before rendering: curly quotes become straight quotes, `…` becomes `...`.
+- Character translations are applied automatically: curly quotes become straight quotes, `…` becomes `...`.
+- Models are downloaded from HuggingFace on first use and cached locally; subsequent runs work fully offline.

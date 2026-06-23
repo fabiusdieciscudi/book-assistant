@@ -12,6 +12,9 @@ import argparse
 import soundfile as sf
 import torch
 from Qwen3TTS import Qwen3TTS, CLONE_PROMPT
+from .AbstractTTS import _hf_snapshot_path
+
+_ASR_REPO = "Qwen/Qwen3-ASR-1.7B"
 
 
 def extract_row(file, string):
@@ -23,15 +26,25 @@ def extract_row(file, string):
     return None
 
 
-def transcribe_audio(audio_path: str) ->  List[ASRTranscription]:
-    try:
-        asr_model = Qwen3ASRModel.from_pretrained("Qwen/Qwen3-ASR-1.7B", dtype=torch.bfloat16, device_map="mps", local_files_only=True)
-    except:
-        debug(f"Loading model: Qwen/Qwen3-ASR-1.7B")
-        asr_model = Qwen3ASRModel.from_pretrained("Qwen/Qwen3-ASR-1.7B", dtype=torch.bfloat16, device_map="mps", local_files_only=False)
-        debug(">>>> done")
+def transcribe_audio(audio_path: str) -> List[ASRTranscription]:
+    """Load the ASR model (local cache only) and transcribe *audio_path*.
+
+    Raises ``FileNotFoundError`` if the model has never been downloaded instead
+    of silently falling through to a network download on any exception.
+    """
+    cached = _hf_snapshot_path(_ASR_REPO)
+    if cached is None:
+        debug(f"ASR model '{_ASR_REPO}' not in cache - downloading...")
+        asr_model = Qwen3ASRModel.from_pretrained(
+            _ASR_REPO, dtype=torch.bfloat16, device_map="mps")
+    else:
+        debug(f"ASR model found in cache: {cached}")
+        asr_model = Qwen3ASRModel.from_pretrained(
+            str(cached), dtype=torch.bfloat16, device_map="mps",
+            local_files_only=True)
 
     return asr_model.transcribe(audio=audio_path, language="italian", return_time_stamps=False)
+
 
 def test_voice(clone_prompt_file: str, text: str, output_wav: str):
     tts = Qwen3TTS(clone_prompt_file, "italian")

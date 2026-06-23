@@ -5,10 +5,7 @@
 
 import os
 from abc import abstractmethod
-import torch
 import numpy as np
-from transformers import CsmForConditionalGeneration, AutoProcessor, logging
-from huggingface_hub import snapshot_download
 from .AbstractTTS import AbstractTTS
 from book_assistant.Commons import debug
 
@@ -23,23 +20,18 @@ class CSMTTS(AbstractTTS):
 
 
     def _deferred_init(self):
+        import torch
+        from transformers import CsmForConditionalGeneration, AutoProcessor, logging
+
         debug(f"Initializing {self._prefix} ...")
         logging.set_verbosity_error()   # FIXME: should be warning
         os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-        self._ensure_model_files()
+        local_dir = self._ensure_hf_model(self._model_repo, local_dir=self._local_dir)
         debug("Loading processor...")
-        self.processor = AutoProcessor.from_pretrained(self._local_dir, local_files_only=True)
+        self.processor = AutoProcessor.from_pretrained(local_dir, local_files_only=True)
         debug("Loading model...")
-        self.model = CsmForConditionalGeneration.from_pretrained(self._local_dir, local_files_only=True).to(self._device)
+        self.model = CsmForConditionalGeneration.from_pretrained(local_dir, local_files_only=True).to(self._device)
         debug(f"Model successfully loaded on {self._device}")
-
-
-    def _ensure_model_files(self):
-        config_path = os.path.join(self._local_dir, "preprocessor_config.json")
-        if not os.path.exists(config_path):
-            debug(f"Model not found locally ({config_path}) - downloading...")
-            snapshot_download(self._model_repo, local_dir=self._local_dir)
-            debug("Download completed")
 
 
     @abstractmethod
@@ -48,6 +40,7 @@ class CSMTTS(AbstractTTS):
 
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
+        import torch
         self.ensure_initialized()
         debug(f"generate_single_chunk('{text}', '{instruct}'")
         if not text.strip():
