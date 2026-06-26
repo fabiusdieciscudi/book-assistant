@@ -11,8 +11,9 @@ A command-line toolkit for authors, providing spell checking, typographic valida
 - **[`check-guillemets`](docs/CHECK_GUILLEMETS.md)**    — validates punctuation around guillemets (`«»`) according to Italian typographic conventions
 - **[`html2txt`](docs/HTML2TXT.md)**                    — converts XHTML chapters (e.g. from TeX4ht) to plain `.txt`
 - **[`fix-transparency`](docs/FIX_TRANSPARENCY.md)**    — removes grey-halo artefacts from PNG illustrations caused by near-transparent alpha residue
+- **[`publish-wp`](docs/PUBLISH_WP.md)**                — publishes HTML chapters to existing WordPress pages
 
-All commands accept either a single file or a folder. Most of them operate on `.txt` files; the exceptions are `fix-transparency`, which operates on `.png` files, and `html2txt`, which operates on `.html` files. When given a folder, all matching files within it (including subdirectories) are processed in alphabetical order.
+All commands accept either a single file or a folder. Most of them operate on `.txt` files; the exceptions are `fix-transparency`, which operates on `.png` files, and `html2txt` and `publish-wp`, which operate on `.html` files. When given a folder, all matching files within it (including subdirectories) are processed in alphabetical order.
 
 ---
 
@@ -152,6 +153,18 @@ BookAssistant fix-transparency <path> [--threshold 30] [--output fixed.png]
 ```
 
 → See [FIX_TRANSPARENCY.md](docs/FIX_TRANSPARENCY.md) for full documentation.
+
+---
+
+### `publish-wp`
+
+Publishes HTML chapters (as produced by TeX4ht) to **existing** WordPress pages through the REST API, updating only the pages whose local file is newer.
+
+```bash
+BookAssistant publish-wp <path> --wp-url 'https://example.com/book/c{n}' [--slug-pattern 'ch(\d+)']
+```
+
+→ See [PUBLISH_WP.md](docs/PUBLISH_WP.md) for full documentation.
 
 ---
 
