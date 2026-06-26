@@ -2,6 +2,7 @@
 # qwen-tts hardcodes transformers==4.57.3, which caps huggingface-hub<1.0, while mlx-audio needs >=1.0
 
 beautifulsoup4==4.14.3
+certifi==2026.2.25
 espeakng-loader==0.2.4
 huggingface-hub==1.11.0         # latest compatible with transformers 4.57
 language-tool-python==3.3.0
