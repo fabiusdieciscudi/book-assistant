@@ -21,6 +21,7 @@ Tag any passage with `@<language>` to switch the active language for everything 
 
 | Tag           | Language                    |
 |---------------|-----------------------------|
+| `@catalan`    | Catalan                     |
 | `@dutch`      | Dutch                       |
 | `@english`    | English                     |
 | `@french`     | French                      |
