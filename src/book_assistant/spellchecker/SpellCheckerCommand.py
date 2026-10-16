@@ -13,6 +13,7 @@ from ..Commons import log, red, debug, measure_time
 _SPELLCHECK_COMMAND = "spellcheck"
 
 _LANGUAGE_MAP = {
+    'catalan':    'ca',
     'dutch':      'nl',
     'english':    'en',
     'french':     'fr',
