@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: © 2026-present Fabius Dieciscudi
 # SPDX-License-Identifier: MIT
 
-SHELL := bash
-VENV  := .venv
+SHELL       := bash
+VENV        := .venv
+PIP_MIN     := 26.2.2
+CERTIFI_MIN := 2026.10.19
 
-.PHONY: venv-prepare venv-init venv-clean venv-bash pip-install-tools pip-install pip-compile pip-audit pip-freeze
+.PHONY: venv-prepare venv-init venv-clean venv-bash pip-install-tools pip-install pip-compile pip-audit pip-freeze pip-check-version
 
-venv-prepare: venv-clean venv-init pip-install-tools pip-install
+venv-prepare: venv-clean venv-init pip-install-tools pip-check-version pip-install
 	@true
 
 venv-init:
@@ -19,8 +21,8 @@ venv-bash:
 	bash --rcfile <(echo "source $(VENV)/bin/activate") -i
 
 pip-install-tools:
-	source $(VENV)/bin/activate && pip install --upgrade pip
-	source $(VENV)/bin/activate && pip install pip-tools pip-audit
+	source $(VENV)/bin/activate && pip install --upgrade "pip>=$(PIP_MIN)"
+	source $(VENV)/bin/activate && pip install --upgrade pip-tools pip-audit "certifi>=$(CERTIFI_MIN)"
 
 pip-install:
 	source $(VENV)/bin/activate && yes | pip uninstall qwen-tts
@@ -28,11 +30,18 @@ pip-install:
 	source $(VENV)/bin/activate && pip install --no-deps qwen-tts==0.1.1
 	source $(VENV)/bin/activate && pip install -e .
 
-pip-compile:
+pip-compile: pip-check-version
 	source $(VENV)/bin/activate && pip-compile --generate-hashes requirements.in --output-file=requirements.txt
 
-pip-audit:
+pip-audit: pip-check-version
 	source $(VENV)/bin/activate && pip-audit
 
-pip-freeze:
+pip-freeze: pip-check-version
 	source $(VENV)/bin/activate && pip freeze
+
+pip-check-version:
+	source $(VENV)/bin/activate && python -c "import sys, pip; \
+	from pip._vendor import certifi as vc; \
+	from pip._vendor.packaging.version import Version as V; \
+	print('pip', pip.__version__, '| certifi in pip', vc.__version__); \
+	sys.exit(0 if V(pip.__version__) >= V('$(PIP_MIN)') and V(vc.__version__) >= V('$(CERTIFI_MIN)') else 1)"
