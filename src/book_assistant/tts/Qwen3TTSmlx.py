@@ -19,7 +19,8 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         super().__init__(voice_name, language, model_size, params)
 
         self._is_voice_design = (voice_name == DESIGN_PROMPT)
-        is_clone = (voice_name == CLONE_PROMPT or voice_name.endswith(".mp3") or voice_name.endswith(".wav"))
+        is_clone = (voice_name == CLONE_PROMPT or
+                    voice_name.lower().endswith((".mp3", ".wav", ".flac", ".m4a", ".mp4", ".aac")))
 
         if self._is_voice_design:
             self._model_name  = _VOICE_DESIGN_MODEL_MLX[model_size]
