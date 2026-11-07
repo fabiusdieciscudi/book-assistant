@@ -198,6 +198,23 @@ Virgilio.grave:  Qwen3:Uncle Fu
 
 This takes precedence over the plain `Virgilio` mapping when the instruct is `grave`.
 
+#### Per-voice parameters
+
+A voice name can be followed by generation parameters that apply only to that speaker, each introduced by `;` and written as `key=value`:
+
+```
+Lilith:     Qwen3:F-eA-pN-tG-vN-008;temperature=0.9;speed=0.9
+Honorat:    Qwen3:M-eA-pN-tG-vN-009;temp=0.7;top_p=0.9
+Virgilio:   MacOS:Luca;speed=1.1
+```
+
+- The keys are the same as in [Qwen3 Generation Parameters](#qwen3-generation-parameters); `temp` is accepted as a short form of `temperature`.
+- They override the session-wide `--qwen3-params` values for that speaker only; the other parameters keep the session values.
+- `speed` works with every voice, because BookAssistant applies it after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
+- A speaker+instruct variant (`Virgilio.grave`) can carry its own parameters.
+
+`;` is used because `:` already appears in voice names (`Qwen3:…`) and `#` starts a comment.
+
 ### Instruct config (`--instruct-config`)
 
 Maps `<voice_prefix>.<instruct>` keys to instruction strings passed to the TTS engine:
@@ -261,7 +278,9 @@ Patches are applied in definition order.
 
 ## Qwen3 Generation Parameters
 
-The `--qwen3-params` flag controls how the Qwen3 model samples audio tokens. It applies uniformly to all Qwen3 voices in the session, including cloned voices.
+The `--qwen3-params` flag controls how the Qwen3 model samples audio tokens. It applies uniformly to all Qwen3 voices in the session, including cloned and designed voices; single speakers can override it in the voices config (see [Per-voice parameters](#per-voice-parameters)).
+
+On the MLX backend the SubTalker parameters below are not supported and are ignored.
 
 ### Quick start: the `audiobook` preset
 
@@ -311,11 +330,13 @@ Qwen3-TTS has a second stage that converts semantic tokens into acoustic tokens.
 | `subtalker_top_p`       | float | Nucleus threshold for the acoustic stage only. |
 | `subtalker_top_k`       | int   | Top-k for the acoustic stage only.             |
 
-#### Speed (MLX backend only)
+#### Speed
 
-| Key     | Type  | Description                                                                                      |
-|---------|-------|--------------------------------------------------------------------------------------------------|
-| `speed` | float | Playback speed multiplier. `1.0` is normal; `1.2` is 20% faster. Ignored on the PyTorch backend. |
+| Key     | Type  | Description                                                                                                                                                   |
+|---------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `speed` | float | Speed multiplier. `1.0` is normal; `1.2` is 20% faster; `0.9` is 10% slower. Pitch is preserved. Works on both backends and, as a per-voice parameter, with every voice. |
+
+The Qwen3 models don't support speed natively (mlx-audio accepts the argument but ignores it), so BookAssistant time-stretches each generated chunk instead. Small changes (roughly 0.85–1.15) sound natural; larger ones may introduce audible artefacts.
 
 ### Notes on sampling
 
