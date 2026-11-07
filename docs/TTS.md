@@ -58,6 +58,19 @@ Virgilio si fermò.
 Poi riprese a parlare.
 ```
 
+Pauses can also be placed anywhere in a line with the `[pause]` tag, which produces the same silence as a blank line, or `[pause:<seconds>]` for an explicit duration:
+
+```
+[Virgilio]: Aspetta. [pause:2] Ecco, ora sì.
+[pause:3]
+[Beatrice]: Andiamo. [pause] Subito.
+```
+
+- The line is split at each tag: the parts are rendered separately with the same voice and the silence is inserted between them, so the tag never reaches the TTS.
+- A line containing only pause tags needs no speaker.
+- The tag is case-insensitive; `[pause:1.5s]` and `[pause: 1.5]` are also accepted. A malformed tag (e.g. `[pause:abc]`) stops the run during validation, with the file name and line number.
+- Other bracketed text inside a line (e.g. `[laugh]`) is not interpreted and is passed to the TTS as it is.
+
 ### Comments
 
 Lines starting with `#` are ignored entirely:
