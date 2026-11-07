@@ -50,6 +50,8 @@ class Qwen3TTSpt(_Qwen3TTSBase):
         do_sample = p.do_sample()
         talker_kw    = p.talker_kwargs()
         subtalker_kw = p.subtalker_kwargs()
+        mode = "design" if self._is_voice_design else "custom" if self._voice_clone_prompt is None else "clone"
+        debug(f"Qwen3-PT {mode} params: do_sample={do_sample}, {talker_kw}, {subtalker_kw}")
 
         if self._is_voice_design:
             wavs, _ = self._model.generate_voice_design(
