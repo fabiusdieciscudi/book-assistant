@@ -336,7 +336,7 @@ Qwen3-TTS has a second stage that converts semantic tokens into acoustic tokens.
 |---------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `speed` | float | Speed multiplier. `1.0` is normal; `1.2` is 20% faster; `0.9` is 10% slower. Pitch is preserved. Works on both backends and, as a per-voice parameter, with every voice. |
 
-The Qwen3 models don't support speed natively (mlx-audio accepts the argument but ignores it), so BookAssistant time-stretches each generated chunk instead. Small changes (roughly 0.85–1.15) sound natural; larger ones may introduce audible artefacts.
+The Qwen3 models don't support speed natively (mlx-audio accepts the argument but ignores it), so BookAssistant time-stretches each generated chunk instead, using [Sonic](https://github.com/waywardgeek/sonic), a pitch-synchronous algorithm designed for speech, through the [libsonic](https://pypi.org/project/libsonic/) package (Apache-2.0). The larger the change, the more likely audible artefacts become.
 
 ### Notes on sampling
 
