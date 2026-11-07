@@ -3,7 +3,7 @@
 
 SHELL       := bash
 VENV        := .venv
-PIP_MIN     := 26.2.2
+PIP_MIN     := 26.3
 CERTIFI_MIN := 2026.10.19
 
 .PHONY: venv-prepare venv-init venv-clean venv-bash pip-install-tools pip-install pip-compile pip-audit pip-freeze pip-check-version
