@@ -101,6 +101,25 @@ def _convert_param(key: str, val: str, context: str) -> int | float:
     return value
 
 
+def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarray:
+    """Changes the speed of a mono chunk without changing its pitch, using Sonic.
+
+    Sonic is a pitch-synchronous algorithm designed for speech.
+
+    :param chunk:                   the mono audio
+    :param sample_rate:             the sample rate of the audio
+    :param speed:                   the speed multiplier (> 1 faster, < 1 slower)
+    :return:                        the stretched audio
+    """
+    from libsonic import SonicStream
+
+    stream = SonicStream(sample_rate, 1)
+    stream.set_speed(speed)
+    stream.write(np.clip(chunk, -1.0, 1.0).astype(np.float32))
+    stream.flush()
+    return np.asarray(stream.read(stream.available_frames()), dtype=np.float32)
+
+
 def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, int | float]]:
     """Splits a voices config value into the voice name and its per-voice parameters.
 
@@ -322,18 +341,19 @@ class TTSCommand(CommandBase):
             chunk, seconds = measure_time(lambda: single_channel(render()))
             debug(f">>>> rendered in {seconds:.1f} sec ({count_words(sentence) / seconds:.1f} words/sec)")
 
-            # Speed is applied here for every voice: the Qwen3 models don't support it natively.
-            speed = voice_params.get("speed")
-            if speed is None and isinstance(tts, _Qwen3TTSBase):
-                speed = tts.params().speed
-            if chunk.size > 0 and speed and speed != 1.0:
-                debug(f"Applying speed {speed}")
-                chunk = librosa.effects.time_stretch(chunk, rate=speed)
-
             if chunk.size > 0:
                 current_sr = tts.sample_rate()
                 if current_sr != self._sample_rate:
                     chunk = librosa.resample(y=chunk, orig_sr=current_sr, target_sr=self._sample_rate, res_type='soxr_hq')
+
+                # Speed is applied here for every voice: the Qwen3 models don't support it natively.
+                speed = voice_params.get("speed")
+                if speed is None and isinstance(tts, _Qwen3TTSBase):
+                    speed = tts.params().speed
+                if speed and speed != 1.0:
+                    debug(f"Applying speed {speed}")
+                    chunk = _time_stretch(chunk, self._sample_rate, speed)
+
                 waveforms.append(chunk)
                 pause = tts.pause_after_new_line()
                 if pause:

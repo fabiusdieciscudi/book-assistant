@@ -373,6 +373,13 @@ language-tool-python==3.3.0 \
     --hash=sha256:60be6dbbd2009b1289ece3785d542dcf8cc148c070a0f901965765a46afb5e4e \
     --hash=sha256:8e50f6d802c54d1ad7a1dc3c414adfbf26c4eb79189df8f63ed2a174ac504fa7
     # via -r requirements.in
+libsonic==0.1.0 \
+    --hash=sha256:1dca410d72d6c9c194943d9d8ea31d901d3e0e111de0e3b8d49dcadad1d1b3b0 \
+    --hash=sha256:5e4545b80f669a9b93172ea81d7eec008ec0aa52210f4746fa6aed77a879ea98 \
+    --hash=sha256:6283fb27c9ab4ddeb98c179728a42ae07919a8f994c7e8cd7d652bd162481664 \
+    --hash=sha256:eb1a853f3a3c8e552313b81c84cd49aa79aca287d68d5895f1873cdb3251fc5d \
+    --hash=sha256:f52c9d6c99fcf292aa1aa3667923d4ea68fddef2e3a6b34b856190ae8f2294fb
+    # via -r requirements.in
 lxml==5.3.1 \
     --hash=sha256:016b96c58e9a4528219bb563acf1aaaa8bc5452e7651004894a973f03b84ba81 \
     --hash=sha256:05123fad495a429f123307ac6d8fd6f977b71e9a0b6d9aeeb8f80c017cb17131 \
