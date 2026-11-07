@@ -21,7 +21,7 @@ from .MacOSTTS import MacOSTTS
 from .PiperTTS import PiperTTS
 from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
-from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model
+from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
 
@@ -61,21 +61,70 @@ def _parse_qwen3_params(raw: list[str] | None) -> Qwen3Params:
     if "audiobook" in items:
         return AUDIOBOOK_PARAMS
 
-    _INT_FIELDS   = {"top_k", "subtalker_top_k", "max_tokens"}
-    _FLOAT_FIELDS = {"temperature", "top_p", "repetition_penalty",
-                     "subtalker_temperature", "subtalker_top_p", "speed"}
-    _ALL_FIELDS   = _INT_FIELDS | _FLOAT_FIELDS
-
     kwargs = {}
     for item in items:
         if ":" not in item:
             raise ValueError(f"--qwen3-params: expected 'key:value', got '{item}'")
         key, _, val = item.partition(":")
-        if key not in _ALL_FIELDS:
-            raise ValueError(f"--qwen3-params: unknown key '{key}'. Valid: {sorted(_ALL_FIELDS)}")
-        kwargs[key] = int(val) if key in _INT_FIELDS else float(val)
+        kwargs[key] = _convert_param(key, val, "--qwen3-params")
 
     return Qwen3Params(**kwargs)
+
+
+_INT_PARAMS   = {"top_k", "subtalker_top_k", "max_tokens"}
+_FLOAT_PARAMS = {"temperature", "top_p", "repetition_penalty",
+                 "subtalker_temperature", "subtalker_top_p", "speed"}
+_ALL_PARAMS   = _INT_PARAMS | _FLOAT_PARAMS
+# Parameters that any voice accepts, because they are applied by BookAssistant itself
+# after generation. All the others are Qwen3 sampling parameters.
+_UNIVERSAL_PARAMS = {"speed"}
+_PARAM_ALIASES = {"temp": "temperature"}
+_VOICE_PARAMS_SEPARATOR = ";"
+
+
+def _convert_param(key: str, val: str, context: str) -> int | float:
+    """Validates *key* and converts *val* to the parameter's type.
+
+    :param key:                     the parameter name
+    :param val:                     the raw value
+    :param context:                 where the parameter comes from, for error messages
+    :return:                        the converted value
+    """
+    if key not in _ALL_PARAMS:
+        raise ValueError(f"{context}: unknown parameter '{key}'. Valid: {sorted(_ALL_PARAMS)}")
+    try:
+        value = int(val) if key in _INT_PARAMS else float(val)
+    except ValueError:
+        raise ValueError(f"{context}: invalid value '{val}' for parameter '{key}'") from None
+    if key == "speed" and value <= 0:
+        raise ValueError(f"{context}: speed must be greater than zero, got {value}")
+    return value
+
+
+def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, int | float]]:
+    """Splits a voices config value into the voice name and its per-voice parameters.
+
+    The value is the voice name, optionally followed by ``;key=value`` items, e.g.
+    ``Qwen3:F-eA-pN-tG-vN-008;temperature=0.9;speed=0.9``. ``temp`` is accepted as
+    an alias for ``temperature``.
+
+    :param speaker:                 the speaker the value belongs to, for error messages
+    :param spec:                    the raw value
+    :return:                        the voice name and the parameters
+    """
+    tts_name, *items = [part.strip() for part in spec.split(_VOICE_PARAMS_SEPARATOR)]
+    context = f"Voices config, speaker '{speaker}'"
+    params = {}
+    for item in items:
+        if not item:
+            continue
+        key, sep, val = item.partition("=")
+        if not sep:
+            raise ValueError(f"{context}: expected 'key=value', got '{item}'")
+        key = key.strip()
+        key = _PARAM_ALIASES.get(key, key)
+        params[key] = _convert_param(key, val.strip(), context)
+    return tts_name, params
 
 
 class TTSCommand(CommandBase):
@@ -129,7 +178,14 @@ class TTSCommand(CommandBase):
                max_lines=99999,
                max_loaded_models=5,
                dry_run=False) -> None:
-        self._tts_name_by_speaker = read_dict(voice_config) if voice_config else {}
+        raw_voice_map             = read_dict(voice_config) if voice_config else {}
+        self._tts_name_by_speaker = {}
+        self._voice_params_by_speaker: dict[str, dict[str, int | float]] = {}
+        for speaker, spec in raw_voice_map.items():
+            tts_name, voice_params = _parse_voice_spec(speaker, spec)
+            self._tts_name_by_speaker[speaker] = tts_name
+            if voice_params:
+                self._voice_params_by_speaker[speaker] = voice_params
         self._instruct_map        = read_dict(instruct_config) if instruct_config else {}
         self._word_patches_map    = read_dict(word_patches) if word_patches else {}
         self._output_file_name    = output
@@ -145,7 +201,7 @@ class TTSCommand(CommandBase):
         qwen3_clone_map = read_dict(qwen3_clone_config) if qwen3_clone_config else {}
         qwen3_model_map = read_dict(qwen3_model_config) if qwen3_model_config else {}
         q3params = _parse_qwen3_params(qwen3_params)
-        _dump_config("Voice config",       self._tts_name_by_speaker)
+        _dump_config("Voice config",       raw_voice_map)
         _dump_config("Instruct config",    self._instruct_map)
         _dump_config("Word patches",       self._word_patches_map)
         _dump_config("Qwen3 clone map",    qwen3_clone_map)
@@ -205,6 +261,14 @@ class TTSCommand(CommandBase):
             register_custom_voice_model(key, pt_repo=repo_id, mlx_repo=repo_id)
             tts_by_name[f"Qwen3:{key}"] = Qwen3TTS("", "italian", model_size=key, params=q3params)
 
+        for speaker, voice_params in self._voice_params_by_speaker.items():
+            tts_name = self._tts_name_by_speaker[speaker]
+            sampling_keys = sorted(set(voice_params) - _UNIVERSAL_PARAMS)
+            if sampling_keys and tts_name in tts_by_name and not isinstance(tts_by_name[tts_name], _Qwen3TTSBase):
+                raise ValueError(f"Voices config, speaker '{speaker}': parameters {sampling_keys} "
+                                 f"are only supported by Qwen3 voices, not by '{tts_name}'")
+
+        _dump_config("Per-voice params",   self._voice_params_by_speaker)
         self._tts_by_name = LRUModelCache(tts_by_name, capacity=max_loaded_models)
 
     def _write_output(self, output: BinaryIO, waveforms: list[Any]) -> None:
@@ -227,24 +291,44 @@ class TTSCommand(CommandBase):
         output.write(buffer.read())
         output.flush()
 
-    def _process_text(self, tts: AbstractTTS, sentence: str, instruct: str, waveforms: list[Any]) -> None:
+    def _process_text(self, tts: AbstractTTS, sentence: str, instruct: str, waveforms: list[Any],
+                      voice_params: dict[str, int | float] | None = None) -> None:
         """Render a single sentence.
 
         :param tts:                     the TTS to use
         :param sentence:                the sentence to render
         :param instruct:                the TTS instruct for adapting the voice
         :param waveforms:               where to append the generated waveforms
+        :param voice_params:            the per-voice parameters from the voices config
         """
-        debug(f"_process_text({tts.prefix()}, '{sentence}', '{instruct}', ...)")
+        debug(f"_process_text({tts.prefix()}, '{sentence}', '{instruct}', {voice_params or {}}, ...)")
         sentence = sentence.strip()
+        voice_params = voice_params or {}
 
         if sentence in self._pause_lines:
             waveforms.append(self._silence(self._pause_silence_duration))
         else:
             instruct_key = f"{tts.prefix()}.{instruct}"
             sentence = self._patched(sentence)
-            chunk, seconds = measure_time(lambda: single_channel(tts.generate_single_chunk(sentence, self._instruct_map.get(instruct_key, ""))))
+            instruct_text = self._instruct_map.get(instruct_key, "")
+            sampling_params = {k: v for k, v in voice_params.items() if k not in _UNIVERSAL_PARAMS}
+
+            def render() -> np.ndarray:
+                if sampling_params:
+                    with tts.overridden_params(sampling_params):
+                        return tts.generate_single_chunk(sentence, instruct_text)
+                return tts.generate_single_chunk(sentence, instruct_text)
+
+            chunk, seconds = measure_time(lambda: single_channel(render()))
             debug(f">>>> rendered in {seconds:.1f} sec ({count_words(sentence) / seconds:.1f} words/sec)")
+
+            # Speed is applied here for every voice: the Qwen3 models don't support it natively.
+            speed = voice_params.get("speed")
+            if speed is None and isinstance(tts, _Qwen3TTSBase):
+                speed = tts.params().speed
+            if chunk.size > 0 and speed and speed != 1.0:
+                debug(f"Applying speed {speed}")
+                chunk = librosa.effects.time_stretch(chunk, rate=speed)
 
             if chunk.size > 0:
                 current_sr = tts.sample_rate()
@@ -373,9 +457,11 @@ class TTSCommand(CommandBase):
                         raise ValueError(f"Unknown speaker: '{speaker}' - valid values: {','.join(sorted(self._tts_name_by_speaker.keys()))} or {','.join(sorted(self._tts_by_name.keys()))}")
 
                     tts = self._tts_by_name[tts_name]
+                    voice_params = self._voice_params_by_speaker.get(speaker, {})
 
                     if not dry_run and (prev_speaker != speaker or prev_instruct != instruct):
-                        log(f"Changed speaker: {yellow(speaker)}, voice: {yellow(tts_name)}, instruct: {yellow(instruct)}")
+                        log(f"Changed speaker: {yellow(speaker)}, voice: {yellow(tts_name)}, instruct: {yellow(instruct)}"
+                            + (f", params: {yellow(str(voice_params))}" if voice_params else ""))
 
                     if speaker != "default" and line and not line[-1] in string.punctuation:
                         line = f"{line}."
@@ -385,7 +471,7 @@ class TTSCommand(CommandBase):
                             words = count_words(line)
                             self._word_count += words
                             log(f"{file_name}[ {l: >3}   ]: ({words : >3} words): {cyan(line)}")
-                            self._process_text(tts, line, instruct, waveforms)
+                            self._process_text(tts, line, instruct, waveforms, voice_params)
                     else:
                         sentences = re.split(r'(?<=[.;:!?])\s+|\s*\.{3}\s*', line)
                         if not dry_run:
@@ -393,7 +479,7 @@ class TTSCommand(CommandBase):
                                 words = count_words(sentence)
                                 self._word_count += words
                                 log(f"{file_name}[ {l: >3}.{s:<2}]: ({words : >3} words): {cyan(sentence)}")
-                                self._process_text(tts, sentence.strip(), instruct, waveforms)
+                                self._process_text(tts, sentence.strip(), instruct, waveforms, voice_params)
 
                 waveforms.append(self._silence(self._new_line_silence_duration))
 

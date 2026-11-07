@@ -76,8 +76,16 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
             # API for VoiceDesign and avoids relying on generate_audio's
             # (undocumented) mode-detection logic. 'instruct' here carries
             # the natural-language voice description, not a delivery style.
+            p = self._params
+            sampling = {}
+            if p.temperature        is not None: sampling['temperature']        = p.temperature
+            if p.top_p              is not None: sampling['top_p']              = p.top_p
+            if p.top_k              is not None: sampling['top_k']              = p.top_k
+            if p.repetition_penalty is not None: sampling['repetition_penalty'] = p.repetition_penalty
+            if p.max_tokens         is not None: sampling['max_tokens']         = p.max_tokens
+            debug(f"Qwen3-MLX design params: {sampling or 'library defaults'}")
             results = list(self._model.generate_voice_design(
-                text=text, language=self._language, instruct=instruct))
+                text=text, language=self._language, instruct=instruct, **sampling))
             return np.asarray(results[0].audio, dtype=np.float32)
 
         from mlx_audio.tts.generate import generate_audio
@@ -90,6 +98,9 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         if p.repetition_penalty is not None: extra['repetition_penalty'] = p.repetition_penalty
         if p.max_tokens         is not None: extra['max_tokens']         = p.max_tokens
 
+        mode = 'clone' if self._ref_audio else 'custom'
+        debug(f"Qwen3-MLX {mode} params: {extra or 'library defaults'}")
+
         ids = self._tokenizer.encode(text)
         tokens = [self._tokenizer.decode([id]) for id in ids]
         log(f"tokenize: {' | '.join(t for t in tokens)}")
@@ -99,7 +110,10 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         try:
             generate_audio(
                 text=text,
-                speed=p.speed,
+                # Speed is applied by TTSCommand after generation: the Qwen3 model ignores it
+                # ("not directly supported yet" in mlx-audio), so passing it here would be a no-op
+                # today and a double application if a future mlx-audio supported it.
+                speed=1.0,
                 model=self._model,
                 voice=self._voice_name,
                 ref_audio=self._ref_audio,
