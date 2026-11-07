@@ -5,7 +5,8 @@
 
 import gc
 from abc import abstractmethod
-from dataclasses import dataclass, field
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from typing import Optional
 import numpy as np
 
@@ -56,7 +57,9 @@ class Qwen3Params:
     subtalker_top_p:              Optional[float] = None
     subtalker_top_k:              Optional[int]   = None
 
-    # ── Speed (MLX only — PT backend ignores this field) ──────────────
+    # ── Speed ──────────────────────────────────────────────────────────
+    # Applied by BookAssistant after generation (time-stretch, pitch preserved),
+    # because the Qwen3 models don't support it natively.
     speed: float = 1.0
 
     def do_sample(self) -> bool:
@@ -129,6 +132,23 @@ class _Qwen3TTSBase(AbstractTTS):
         super().__init__("Qwen3", voice_name, language, _SAMPLE_RATE, max_words=250)
         self._model_size = model_size
         self._params = params or Qwen3Params()
+
+    def params(self) -> Qwen3Params:
+        """Returns the generation parameters currently in effect."""
+        return self._params
+
+    @contextmanager
+    def overridden_params(self, overrides: dict):
+        """Temporarily replaces some generation parameters, e.g. for a single character.
+
+        :param overrides:               the parameters to override, by field name
+        """
+        saved = self._params
+        self._params = replace(saved, **overrides)
+        try:
+            yield
+        finally:
+            self._params = saved
 
     def close(self):
         warning(f"Unloading Qwen3-MLX ({self._model_size}) from '{self._model_name}'")
