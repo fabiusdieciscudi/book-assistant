@@ -27,6 +27,9 @@ from .LRUModelCache import LRUModelCache
 
 _TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
+# Inline pause tag: [pause] or [pause:<seconds>], e.g. [pause:1.5].
+_PAUSE_TAG_PATTERN = re.compile(r'\[\s*pause\b([^\]]*)\]', re.IGNORECASE)
+_PAUSE_ARG_PATTERN = re.compile(r'^\s*:\s*(\d+(?:\.\d+)?)\s*s?\s*$')
 _CHAR_TRANSLATIONS = str.maketrans({"’": "'", "…": "...", '“': '"', '”': '"'})
 _DEFAULT_PAUSE_LINES: set[str] = {"", "***"}
 
@@ -99,6 +102,38 @@ def _convert_param(key: str, val: str, context: str) -> int | float:
     if key == "speed" and value <= 0:
         raise ValueError(f"{context}: speed must be greater than zero, got {value}")
     return value
+
+
+def _split_pauses(text: str) -> list[str | float | None]:
+    """Splits *text* at the inline pause tags.
+
+    :param text:                    the text, possibly containing ``[pause]`` or ``[pause:<seconds>]``
+    :return:                        the text segments (``str``) interleaved with the pauses:
+                                    ``None`` for the default duration, a ``float`` for an explicit one
+    """
+    parts: list[str | float | None] = []
+    position = 0
+    for match in _PAUSE_TAG_PATTERN.finditer(text):
+        parts.append(text[position:match.start()])
+        argument = match.group(1)
+        if not argument.strip():
+            parts.append(None)
+        else:
+            duration = _PAUSE_ARG_PATTERN.match(argument)
+            if not duration:
+                raise ValueError(f"Invalid pause tag '{match.group(0)}': expected [pause] or [pause:<seconds>], e.g. [pause:1.5]")
+            parts.append(float(duration.group(1)))
+        position = match.end()
+    parts.append(text[position:])
+    # Drops empty segments and leftovers made only of punctuation (e.g. the '.' in "Ciao. [pause].").
+    return [part for part in parts if not isinstance(part, str) or any(c.isalnum() for c in part)]
+
+
+def _normalized_pauses(text: str) -> str:
+    """Rewrites the pause tags in a compact form (e.g. ``[ pause : 1.5 ]`` -> ``[pause:1.5]``),
+    so that sentence splitting never cuts through a tag."""
+    return _PAUSE_TAG_PATTERN.sub(lambda m: f"[pause:{float(_PAUSE_ARG_PATTERN.match(m.group(1)).group(1))}]"
+                                  if m.group(1).strip() else "[pause]", text)
 
 
 def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarray:
@@ -326,38 +361,62 @@ class TTSCommand(CommandBase):
 
         if sentence in self._pause_lines:
             waveforms.append(self._silence(self._pause_silence_duration))
-        else:
-            instruct_key = f"{tts.prefix()}.{instruct}"
-            sentence = self._patched(sentence)
-            instruct_text = self._instruct_map.get(instruct_key, "")
-            sampling_params = {k: v for k, v in voice_params.items() if k not in _UNIVERSAL_PARAMS}
+            return
 
-            def render() -> np.ndarray:
-                if sampling_params:
-                    with tts.overridden_params(sampling_params):
-                        return tts.generate_single_chunk(sentence, instruct_text)
-                return tts.generate_single_chunk(sentence, instruct_text)
+        rendered = False
+        for part in _split_pauses(sentence):
+            if isinstance(part, str):
+                chunk = self._render_segment(tts, part.strip(), instruct, voice_params)
+                if chunk.size > 0:
+                    waveforms.append(chunk)
+                    rendered = True
+            else:
+                duration = self._pause_silence_duration if part is None else part
+                debug(f"Inline pause: {duration} sec")
+                waveforms.append(self._silence(duration))
 
-            chunk, seconds = measure_time(lambda: single_channel(render()))
-            debug(f">>>> rendered in {seconds:.1f} sec ({count_words(sentence) / seconds:.1f} words/sec)")
+        pause = tts.pause_after_new_line()
+        if rendered and pause:
+            waveforms.append(self._silence(pause))
 
-            if chunk.size > 0:
-                current_sr = tts.sample_rate()
-                if current_sr != self._sample_rate:
-                    chunk = librosa.resample(y=chunk, orig_sr=current_sr, target_sr=self._sample_rate, res_type='soxr_hq')
+    def _render_segment(self, tts: AbstractTTS, text: str, instruct: str,
+                        voice_params: dict[str, int | float]) -> np.ndarray:
+        """Renders a piece of text with no pause tags, at the output sample rate.
 
-                # Speed is applied here for every voice: the Qwen3 models don't support it natively.
-                speed = voice_params.get("speed")
-                if speed is None and isinstance(tts, _Qwen3TTSBase):
-                    speed = tts.params().speed
-                if speed and speed != 1.0:
-                    debug(f"Applying speed {speed}")
-                    chunk = _time_stretch(chunk, self._sample_rate, speed)
+        :param tts:                     the TTS to use
+        :param text:                    the text to render
+        :param instruct:                the TTS instruct for adapting the voice
+        :param voice_params:            the per-voice parameters from the voices config
+        :return:                        the waveform (possibly empty)
+        """
+        instruct_key = f"{tts.prefix()}.{instruct}"
+        text = self._patched(text)
+        instruct_text = self._instruct_map.get(instruct_key, "")
+        sampling_params = {k: v for k, v in voice_params.items() if k not in _UNIVERSAL_PARAMS}
 
-                waveforms.append(chunk)
-                pause = tts.pause_after_new_line()
-                if pause:
-                    waveforms.append(self._silence(pause))
+        def render() -> np.ndarray:
+            if sampling_params:
+                with tts.overridden_params(sampling_params):
+                    return tts.generate_single_chunk(text, instruct_text)
+            return tts.generate_single_chunk(text, instruct_text)
+
+        chunk, seconds = measure_time(lambda: single_channel(render()))
+        debug(f">>>> rendered in {seconds:.1f} sec ({count_words(text) / seconds:.1f} words/sec)")
+
+        if chunk.size > 0:
+            current_sr = tts.sample_rate()
+            if current_sr != self._sample_rate:
+                chunk = librosa.resample(y=chunk, orig_sr=current_sr, target_sr=self._sample_rate, res_type='soxr_hq')
+
+            # Speed is applied here for every voice: the Qwen3 models don't support it natively.
+            speed = voice_params.get("speed")
+            if speed is None and isinstance(tts, _Qwen3TTSBase):
+                speed = tts.params().speed
+            if speed and speed != 1.0:
+                debug(f"Applying speed {speed}")
+                chunk = _time_stretch(chunk, self._sample_rate, speed)
+
+        return chunk
 
     def _patched(self, sentence: str) -> str:
         """Patch *sentence* using the word-patches map.
@@ -452,6 +511,22 @@ class TTSCommand(CommandBase):
 
                 if line and not line.startswith("#"):
                     line = line.translate(_CHAR_TRANSLATIONS).strip()
+                    try:
+                        parts = _split_pauses(line)
+                    except ValueError as e:
+                        raise ValueError(f"{file_name}, line {l}: {e}") from None
+                    line = _normalized_pauses(line)
+
+                    # A line with only pause tags needs no voice.
+                    if parts and all(not isinstance(part, str) for part in parts):
+                        if not dry_run:
+                            for part in parts:
+                                duration = self._pause_silence_duration if part is None else part
+                                log(f"{file_name}[ {l: >3}   ]: pause {duration} sec")
+                                waveforms.append(self._silence(duration))
+                        waveforms.append(self._silence(self._new_line_silence_duration))
+                        continue
+
                     match = _SPEAKER_PATTERN.match(line)
                     prev_speaker = speaker
                     prev_instruct = instruct
