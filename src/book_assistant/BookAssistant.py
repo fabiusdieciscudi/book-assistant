@@ -29,7 +29,7 @@ if __name__ == '__main__':
     command_map: dict[str, CommandBase] = {cmd.name(): cmd for cmd in book_assistant.COMMANDS}
     parser = argparse.ArgumentParser(description="BookAssistant")
     parser.add_argument("command", choices=list(command_map), help="Command to run.")
-    parser.add_argument("path", help="File or folder to process.")
+    parser.add_argument("path", nargs="?", default=None, help="File or folder to process.")
     parser.add_argument("--version", action="version", version=f"BookAssistant {__version__}")
     parser.add_argument("--debug", action="store_true", default=False, help="Verbose logging.")
     parser.add_argument("--dry-run", action="store_true", default=False, help="Validate without time-expensive operations.")
@@ -38,5 +38,7 @@ if __name__ == '__main__':
         command.process_args(parser)
 
     args = parser.parse_args()
+    if args.path is None and not (args.command == "tts" and getattr(args, "list_unused", False)):
+        parser.error("the following arguments are required: path")
     set_debug(args.debug)
     command_map[args.command].run(args)

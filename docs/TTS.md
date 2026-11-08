@@ -411,6 +411,7 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | `--max-loaded-models <n>`       | Maximum number of voices to keep in memory simultaneously (default: 5). |
 | `--max-lines <n>`               | Stop after processing this many lines (default: all).                   |
 | `--dry-run`                     | Validate speaker/voice assignments without rendering audio.             |
+| `--list-unused`                 | List the available voices that no speaker uses in the voices config, grouped by engine, plus the assigned voices that don't exist. No file to process is needed. |
 | `--debug`                       | Enable verbose logging.                                                 |
 
 ---

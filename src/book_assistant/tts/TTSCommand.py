@@ -263,8 +263,20 @@ class TTSCommand(CommandBase):
         parser.add_argument("--format",                       default="WAV",                 help="Output file format (default: WAV)")
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
+        parser.add_argument("--list-unused",  action="store_true", default=False,            help="List the available voices not assigned in the voices config, without rendering")
+
+    def run(self, args) -> None:
+        if getattr(args, "list_unused", False):
+            self._setup_from_args(args)
+            self._list_unused()
+        else:
+            super().run(args)
 
     def _run(self, args, path: Path) -> None:
+        self._setup_from_args(args)
+        self.generate_wav_from_file(str(path))
+
+    def _setup_from_args(self, args) -> None:
         self._setup(voice_config=args.voices_config,
                     instruct_config=args.instruct_config,
                     qwen3_clone_config=args.qwen3_clone_config,
@@ -277,7 +289,32 @@ class TTSCommand(CommandBase):
                     max_lines=args.max_lines,
                     max_loaded_models=args.max_loaded_models,
                     dry_run=args.dry_run)
-        self.generate_wav_from_file(str(path))
+
+    def _list_unused(self) -> None:
+        """Prints, on stdout, the available voices that no speaker uses in the voices config,
+        grouped by engine, and the assigned voices that don't exist."""
+        available = set(self._tts_by_name.keys())
+        assigned = set(self._tts_name_by_speaker.values())
+        def engine_of(name: str) -> str:
+            return name.split(":", 1)[0] if ":" in name else ""
+        # Grouped by engine (standalone voices last), then by name
+        unused = sorted(available - assigned, key=lambda n: (engine_of(n) == "", engine_of(n).casefold(), n.casefold()))
+        unknown = sorted(assigned - available, key=str.casefold)
+
+        print(f"Unused voices ({len(unused)} of {len(available)} available):")
+        engine = None
+        for name in unused:
+            current = engine_of(name)
+            if current != engine:
+                engine = current
+                print(f"  {engine or '(standalone)'}:")
+            print(f"    {name}")
+
+        if unknown:
+            print(f"Assigned but not available ({len(unknown)}):")
+            for name in unknown:
+                speakers = sorted(s for s, v in self._tts_name_by_speaker.items() if v == name)
+                print(f"    {name}  <- {', '.join(speakers)}")
 
     def _finish(self) -> None:
         super()._finish()
