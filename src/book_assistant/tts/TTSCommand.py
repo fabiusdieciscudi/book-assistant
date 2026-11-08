@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 import io
+import os
 import re
 import string
 import sys
@@ -22,7 +23,7 @@ from .PiperTTS import PiperTTS
 from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
 from .AudioEffects import parse_effects, apply_effects
-from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase
+from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
 
@@ -192,6 +193,24 @@ def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarr
     stream.write(np.clip(chunk, -1.0, 1.0).astype(np.float32))
     stream.flush()
     return np.asarray(stream.read(stream.available_frames()), dtype=np.float32)
+
+
+def _read_clone_config(file_paths: str | list[str]) -> dict[str, str]:
+    """Reads one or more Qwen3 clone configs, resolving relative audio paths against the folder
+    of the config file that defines them (the ``@ref`` entries are texts and are left as they are).
+
+    :param file_paths:              the config file(s); as with ``read_dict``, they are read in sorted order
+                                    and a later definition of the same key wins
+    :return:                        the merged clone map
+    """
+    result = {}
+    for file_path in [file_paths] if isinstance(file_paths, str) else sorted(file_paths):
+        base = os.path.dirname(os.path.abspath(file_path))
+        for key, value in read_dict(file_path).items():
+            if not key.endswith("@ref") and value and value != CLONE_PROMPT and not os.path.isabs(value):
+                value = os.path.normpath(os.path.join(base, value))
+            result[key] = value
+    return result
 
 
 def _samples(waveforms: list[Any]) -> int:
@@ -365,7 +384,7 @@ class TTSCommand(CommandBase):
         self._compression_level   = compression_level
         self._dry_run             = dry_run
 
-        qwen3_clone_map = read_dict(qwen3_clone_config) if qwen3_clone_config else {}
+        qwen3_clone_map = _read_clone_config(qwen3_clone_config) if qwen3_clone_config else {}
         qwen3_model_map = read_dict(qwen3_model_config) if qwen3_model_config else {}
         q3params = _parse_qwen3_params(qwen3_params)
         _dump_config("Voice config",       raw_voice_map)
