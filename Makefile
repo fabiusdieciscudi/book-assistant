@@ -43,7 +43,7 @@ test-voices: $(TEST_RESULTS)
 		--output-dir       $(TEST_RESULTS)/voices \
 		--voices-config    test/multi-voice.conf \
 		--instruct-config  test/instruct.conf \
-		--qwen3-clone-config $(CLONED_VOICES)/qwen3-clones.conf \
+		$(patsubst %,--qwen3-clone-config %,$(sort $(VOICES))) \
 		$(if $(DEBUG),--debug)
 
 $(BUILD):
