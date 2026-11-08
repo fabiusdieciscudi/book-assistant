@@ -171,7 +171,7 @@ def _split_pauses(text: str) -> list[str | float | None]:
 def _normalized_pauses(text: str) -> str:
     """Rewrites the pause tags in a compact form (e.g. ``[ pause : 1.5 ]`` -> ``[pause:1.5]``),
     so that sentence splitting never cuts through a tag."""
-    return _PAUSE_TAG_PATTERN.sub(lambda m: f"[pause:{float(_PAUSE_ARG_PATTERN.match(m.group(1)).group(1))}]"
+    return _PAUSE_TAG_PATTERN.sub(lambda m: f"[pause:{_PAUSE_ARG_PATTERN.match(m.group(1)).group(1)}]"
                                   if m.group(1).strip() else "[pause]", text)
 
 
@@ -192,6 +192,11 @@ def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarr
     stream.write(np.clip(chunk, -1.0, 1.0).astype(np.float32))
     stream.flush()
     return np.asarray(stream.read(stream.available_frames()), dtype=np.float32)
+
+
+def _samples(waveforms: list[Any]) -> int:
+    """Returns the number of samples in *waveforms*, ignoring the effect tails (they don't add length)."""
+    return sum(len(w) for w in waveforms if not isinstance(w, _Tail))
 
 
 def _effects_or_none(name: str) -> list[tuple[str, int]] | None:
@@ -263,6 +268,7 @@ class TTSCommand(CommandBase):
         parser.add_argument("--format",                       default="WAV",                 help="Output file format (default: WAV)")
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
+        parser.add_argument("--timestamps",                   default=None,                  help="Write the position of each line in the audio to this file (Audacity label format)")
         parser.add_argument("--list-unused",  action="store_true", default=False,            help="List the available voices not assigned in the voices config, without rendering")
 
     def run(self, args) -> None:
@@ -288,6 +294,7 @@ class TTSCommand(CommandBase):
                     compression_level=args.compression / 100,
                     max_lines=args.max_lines,
                     max_loaded_models=args.max_loaded_models,
+                    timestamps=args.timestamps,
                     dry_run=args.dry_run)
 
     def _list_unused(self) -> None:
@@ -332,7 +339,11 @@ class TTSCommand(CommandBase):
                compression_level=0,
                max_lines=99999,
                max_loaded_models=5,
+               timestamps=None,
                dry_run=False) -> None:
+        self._labels_file_name    = timestamps
+        self._labels: list[tuple[float, float, str]] = []
+        self._speech_end_samples  = 0
         raw_voice_map             = read_dict(voice_config) if voice_config else {}
         self._tts_name_by_speaker = {}
         self._voice_params_by_speaker: dict[str, dict[str, Any]] = {}
@@ -427,6 +438,22 @@ class TTSCommand(CommandBase):
         _dump_config("Per-voice params",   self._voice_params_by_speaker)
         self._tts_by_name = LRUModelCache(tts_by_name, capacity=max_loaded_models)
 
+    def _timestamp(self, samples: int) -> str:
+        """Formats a position in the output for the log, only when labels are being written."""
+        if not self._labels_file_name:
+            return ""
+        seconds = samples / self._sample_rate
+        return f"@{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{seconds % 60:06.3f} "
+
+    def _write_labels(self) -> None:
+        """Writes the position of each rendered line, in the Audacity label format:
+        start and end in seconds, then the text, separated by tabs."""
+        with open(self._labels_file_name, "w", encoding="utf-8") as f:
+            for start, end, text in self._labels:
+                clean = " ".join(text.split())          # no tabs or newlines inside the label
+                f.write(f"{start:.6f}\t{end:.6f}\t{clean}\n")
+        log(f"Labels written to '{self._labels_file_name}' ({len(self._labels)} lines)")
+
     def _write_output(self, output: BinaryIO, waveforms: list[Any]) -> None:
         """Writes the waveforms to a file.
 
@@ -486,6 +513,7 @@ class TTSCommand(CommandBase):
                 debug(f"Inline pause: {duration} sec")
                 waveforms.append(self._silence(duration))
 
+        self._speech_end_samples = _samples(waveforms)
         pause = tts.pause_after_new_line()
         if rendered and pause:
             waveforms.append(self._silence(pause))
@@ -688,11 +716,13 @@ class TTSCommand(CommandBase):
                     if speaker != "default" and line and not line[-1] in string.punctuation:
                         line = f"{line}."
 
+                    line_start = _samples(waveforms)
+                    self._speech_end_samples = line_start
                     if count_words(line) <= tts.max_words():
                         if not dry_run:
                             words = count_words(line)
                             self._word_count += words
-                            log(f"{file_name}[ {l: >3}   ]: ({words : >3} words): {cyan(line)}")
+                            log(f"{file_name}[ {l: >3}   ]: {self._timestamp(line_start)}({words : >3} words): {cyan(line)}")
                             self._process_text(tts, line, tts_instruct, waveforms, voice_params)
                     else:
                         sentences = re.split(r'(?<=[.;:!?])\s+|\s*\.{3}\s*', line)
@@ -700,8 +730,10 @@ class TTSCommand(CommandBase):
                             for s, sentence in enumerate(sentences, 1):
                                 words = count_words(sentence)
                                 self._word_count += words
-                                log(f"{file_name}[ {l: >3}.{s:<2}]: ({words : >3} words): {cyan(sentence)}")
+                                log(f"{file_name}[ {l: >3}.{s:<2}]: {self._timestamp(_samples(waveforms))}({words : >3} words): {cyan(sentence)}")
                                 self._process_text(tts, sentence.strip(), tts_instruct, waveforms, voice_params)
+                    if not dry_run and self._labels_file_name and self._speech_end_samples > line_start:
+                        self._labels.append((line_start / self._sample_rate, self._speech_end_samples / self._sample_rate, line))
 
                 waveforms.append(self._silence(self._new_line_silence_duration))
 
@@ -722,6 +754,8 @@ class TTSCommand(CommandBase):
                 waveforms = self._generate_wav_from_file(input_file_path, dry_run=False)
                 if waveforms:
                     self._write_output(output, waveforms)
+                if self._labels_file_name:
+                    self._write_labels()
             finally:
                 if output is not None:
                     output.close()
