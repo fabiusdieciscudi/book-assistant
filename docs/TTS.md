@@ -272,6 +272,8 @@ MyVoice@ref:     The reference text spoken in the audio file.
 
 This registers the voice as `Qwen3:MyVoice` and makes it available in the voices config like any built-in voice.
 
+A relative path is resolved against the folder of the config file that contains it, not against the current directory, so a config can be kept next to its audio files. The option can be repeated with configs in different folders: each one resolves its own paths. The `@ref` entries are texts, never paths.
+
 This form is used on Apple Silicon Macs (MLX backend). On the other platforms (PyTorch backend) the value must instead be a `.pkl` voice-clone prompt, and no `@ref` entry is needed:
 
 ```
