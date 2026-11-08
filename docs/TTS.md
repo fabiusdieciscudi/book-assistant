@@ -397,22 +397,23 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 
 ## Options
 
-| Option                          | Description                                                             |
-|---------------------------------|-------------------------------------------------------------------------|
-| `--output <file>`               | Output file path. Defaults to stdout.                                   |
-| `--format <fmt>`                | Output format: `WAV` or `MP3` (default: `WAV`).                         |
-| `--compression <n>`             | Compression level 0–99 for MP3 (default: `0`).                          |
-| `--voices-config <file>`        | Speaker-to-voice mapping. Repeatable.                                   |
-| `--instruct-config <file>`      | Voice instruction mapping. Repeatable.                                  |
-| `--qwen3-clone-config <file>`   | Qwen3 cloned voice definitions. Repeatable.                             |
-| `--qwen3-model-config <file>`   | Extra Qwen3 checkpoints (name: HF repo id). Repeatable.                 |
-| `--qwen3-params <key:value>`    | Qwen3 generation parameter or `audiobook` preset. Repeatable.           |
-| `--word-patches <file>`         | Word-level pronunciation patches. Repeatable.                           |
-| `--max-loaded-models <n>`       | Maximum number of voices to keep in memory simultaneously (default: 5). |
-| `--max-lines <n>`               | Stop after processing this many lines (default: all).                   |
-| `--dry-run`                     | Validate speaker/voice assignments without rendering audio.             |
-| `--list-unused`                 | List the available voices that no speaker uses in the voices config, grouped by engine, plus the assigned voices that don't exist. No file to process is needed. |
-| `--debug`                       | Enable verbose logging.                                                 |
+| Option                        | Description                                                             |
+|-------------------------------|-------------------------------------------------------------------------|
+| `--output <file>`             | Output file path. Defaults to stdout.                                   |
+| `--format <fmt>`              | Output format: `WAV` or `MP3` (default: `WAV`).                         |
+| `--compression <n>`           | Compression level 0–99 for MP3 (default: `0`).                          |
+| `--voices-config <file>`      | Speaker-to-voice mapping. Repeatable.                                   |
+| `--instruct-config <file>`    | Voice instruction mapping. Repeatable.                                  |
+| `--qwen3-clone-config <file>` | Qwen3 cloned voice definitions. Repeatable.                             |
+| `--qwen3-model-config <file>` | Extra Qwen3 checkpoints (name: HF repo id). Repeatable.                 |
+| `--qwen3-params <key:value>`  | Qwen3 generation parameter or `audiobook` preset. Repeatable.           |
+| `--word-patches <file>`       | Word-level pronunciation patches. Repeatable.                           |
+| `--max-loaded-models <n>`     | Maximum number of voices to keep in memory simultaneously (default: 5). |
+| `--max-lines <n>`             | Stop after processing this many lines (default: all).                   |
+| `--dry-run`                   | Validate speaker/voice assignments without rendering audio.             |
+| `--timestamps <file>`         | Write the position of each line in the generated audio to *file*, in the Audacity label format (start and end in seconds, then the line's text, separated by tabs), and show each line's start time in the log. See [Labels](#labels). |
+| `--list-unused`               | List the available voices that no speaker uses in the voices config, grouped by engine, plus the assigned voices that don't exist. No file to process is needed. |
+| `--debug`                     | Enable verbose logging.                                                 |
 
 ---
 
@@ -423,3 +424,24 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 - The input file is always validated before rendering begins, so speaker/voice errors are caught upfront.
 - Character translations are applied automatically: curly quotes become straight quotes, `…` becomes `...`.
 - Models are downloaded from HuggingFace on first use and cached locally; subsequent runs work fully offline.
+
+## Labels
+
+With `--labels <file>`, BookAssistant writes one line per rendered text line:
+
+```
+15.920000	31.305000	Claire Goodwill, cacciatrice di teste. In senso puramente professionale, s'intende.
+```
+
+- Start and end delimit the speech of that line only: the pauses before and after it are excluded, while inline pauses (`[pause]`) are included. Echo and reverb tails, which spill into the following pause, are outside the range.
+- Lines containing only pauses are not listed.
+- The file can be imported in Audacity (*File → Import → Labels*) to check or adjust the cut points.
+- The lines can be cut automatically with ffmpeg; with WAV output the cut is sample-accurate:
+
+```bash
+n=0
+while IFS=$'\t' read -r start end text; do
+    n=$((n + 1))
+    ffmpeg -nostdin -loglevel error -ss "$start" -to "$end" -i out.wav -c copy "$(printf '%03d' $n).wav"
+done < labels.txt
+```
