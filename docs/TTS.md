@@ -223,10 +223,34 @@ Virgilio:   MacOS:Luca;speed=1.1
 
 - The keys are the same as in [Qwen3 Generation Parameters](#qwen3-generation-parameters); `temp` is accepted as a short form of `temperature`.
 - They override the session-wide `--qwen3-params` values for that speaker only; the other parameters keep the session values.
-- `speed` works with every voice, because BookAssistant applies it after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
+- `speed` and `fx` (see [Audio effects](#audio-effects)) work with every voice, because BookAssistant applies them after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
 - A speaker+instruct variant (`Virgilio.grave`) can carry its own parameters.
 
 `;` is used because `:` already appears in voice names (`Qwen3:…`) and `#` starts a comment.
+
+#### Audio effects
+
+The `fx` parameter applies post-processing effects to a speaker; several effects are chained with `+` and applied in the order written:
+
+```
+Centralino:       Qwen3:F-eA-pN-tG-vN-008;fx=phone
+Pilota:           Qwen3:M-eA-pN-tG-vN-009;fx=radio+echo1
+Lilith.telefono:  Qwen3:F-eA-pN-tG-vS-008;speed=0.9;fx=telefono
+```
+
+| Effect           | Synonyms (IT, FR)                              | Description                                                                         |
+|------------------|------------------------------------------------|-------------------------------------------------------------------------------------|
+| `phone`          | `telefono`, `telephone`, `téléphone`           | Good-quality phone line: 280–4000 Hz band with gentle slopes, earpiece presence around 2 kHz, a hint of saturation. |
+| `radio`          | `trasmittente`, `ricetrasmittente`, `transmitter`, `walkie-talkie`, `émetteur` | Two-way radio: 500–2500 Hz band, strong saturation, hiss, squelch at both ends. |
+| `echo1`…`echo3`  | `eco`, `écho`                                  | Repeating echo: 1 = large room (120 ms), 2 = courtyard (250 ms), 3 = valley (400 ms). |
+| `reverb1`…`reverb3` | `riverbero`, `reverberation`, `réverbération` | Reverb: 1 = room (0.4 s), 2 = hall (1.2 s), 3 = church (2.5 s).                     |
+
+- Names are case-insensitive and accents are optional; `echo` and `reverb` without a level mean level 2.
+- The key can also be written as `effect`, `effetto` or `effet`.
+- Effects work with every voice, not only Qwen3, and are applied after `speed`.
+- Echo and reverb tails don't make the output longer: they are mixed over the pause that follows the line.
+- An effect can also be used for single lines, by putting its name (or a chain like `radio+eco1`) in place of the instruct: `[Lilith, telefono]:` renders Lilith's voice, with her own parameters, through the phone. No voices config entry is needed; the line is rendered with the `default` instruct, and any effect already set for Lilith is applied first.
+- If an explicit speaker+instruct variant exists (e.g. `Lilith.telefono` in the voices config), it takes precedence and is used as it is.
 
 ### Instruct config (`--instruct-config`)
 

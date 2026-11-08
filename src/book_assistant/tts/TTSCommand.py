@@ -14,13 +14,14 @@ import librosa
 import numpy as np
 import soundfile as sf
 from book_assistant.CommandBase import CommandBase
-from book_assistant.Commons import count_words, log, read_dict, yellow, cyan, debug, single_channel, measure_time
+from book_assistant.Commons import count_words, log, read_dict, yellow, cyan, debug, single_channel, measure_time, warning
 from .AbstractTTS import AbstractTTS
 from .AzzurraVoiceTTS import AzzurraVoiceTTS
 from .MacOSTTS import MacOSTTS
 from .PiperTTS import PiperTTS
 from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
+from .AudioEffects import parse_effects, apply_effects
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
@@ -80,8 +81,9 @@ _FLOAT_PARAMS = {"temperature", "top_p", "repetition_penalty",
 _ALL_PARAMS   = _INT_PARAMS | _FLOAT_PARAMS
 # Parameters that any voice accepts, because they are applied by BookAssistant itself
 # after generation. All the others are Qwen3 sampling parameters.
-_UNIVERSAL_PARAMS = {"speed"}
+_UNIVERSAL_PARAMS = {"speed", "fx"}
 _PARAM_ALIASES = {"temp": "temperature"}
+_FX_KEYS = {"fx", "effect", "effects", "effetto", "effetti", "effet", "effets"}
 _VOICE_PARAMS_SEPARATOR = ";"
 
 
@@ -102,6 +104,43 @@ def _convert_param(key: str, val: str, context: str) -> int | float:
     if key == "speed" and value <= 0:
         raise ValueError(f"{context}: speed must be greater than zero, got {value}")
     return value
+
+
+class _Tail:
+    """The tail of an echo or reverb, to be mixed over the waveforms that follow it."""
+
+    def __init__(self, samples: np.ndarray):
+        self.samples = samples
+
+
+def _mix_tails(waveforms: list[Any]) -> list[Any]:
+    """Mixes each effect tail over the following waveforms (usually the pause after the line),
+    so that echo and reverb don't make the output longer.
+
+    :param waveforms:               the waveforms, possibly containing :class:`_Tail` markers
+    :return:                        the waveforms with the tails mixed in
+    """
+    result = []
+    pending: np.ndarray | None = None
+    for item in waveforms:
+        if isinstance(item, _Tail):
+            if pending is None or pending.size == 0:
+                pending = item.samples.copy()
+            else:
+                longer = np.zeros(max(len(pending), len(item.samples)), dtype=np.float32)
+                longer[:len(pending)] += pending
+                longer[:len(item.samples)] += item.samples
+                pending = longer
+            continue
+        if pending is not None and pending.size and item.size:
+            n = min(len(pending), len(item))
+            item = item.astype(np.float32, copy=True)
+            item[:n] = np.clip(item[:n] + pending[:n], -1.0, 1.0)
+            pending = pending[n:]
+        result.append(item)
+    if pending is not None and pending.size:
+        result.append(pending)
+    return result
 
 
 def _split_pauses(text: str) -> list[str | float | None]:
@@ -155,7 +194,26 @@ def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarr
     return np.asarray(stream.read(stream.available_frames()), dtype=np.float32)
 
 
-def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, int | float]]:
+def _effects_or_none(name: str) -> list[tuple[str, int]] | None:
+    """Returns the effects named by *name* (e.g. ``telefono`` or ``radio+eco1``), or None if it isn't an effect chain."""
+    if name == "default":
+        return None
+    try:
+        return parse_effects(name)
+    except ValueError:
+        return None
+
+
+def _format_voice_params(params: dict[str, Any]) -> str:
+    """Formats per-voice parameters for the log, e.g. ``temperature=0.9, fx=phone+echo1``."""
+    def value(key, val):
+        if key == "fx":
+            return "+".join(f"{effect}{level or ''}" for effect, level in val)
+        return str(val)
+    return ", ".join(f"{key}={value(key, val)}" for key, val in params.items())
+
+
+def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, Any]]:
     """Splits a voices config value into the voice name and its per-voice parameters.
 
     The value is the voice name, optionally followed by ``;key=value`` items, e.g.
@@ -176,6 +234,12 @@ def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, int | flo
         if not sep:
             raise ValueError(f"{context}: expected 'key=value', got '{item}'")
         key = key.strip()
+        if key.lower() in _FX_KEYS:
+            try:
+                params["fx"] = parse_effects(val)
+            except ValueError as e:
+                raise ValueError(f"{context}: {e}") from None
+            continue
         key = _PARAM_ALIASES.get(key, key)
         params[key] = _convert_param(key, val.strip(), context)
     return tts_name, params
@@ -234,13 +298,14 @@ class TTSCommand(CommandBase):
                dry_run=False) -> None:
         raw_voice_map             = read_dict(voice_config) if voice_config else {}
         self._tts_name_by_speaker = {}
-        self._voice_params_by_speaker: dict[str, dict[str, int | float]] = {}
+        self._voice_params_by_speaker: dict[str, dict[str, Any]] = {}
         for speaker, spec in raw_voice_map.items():
             tts_name, voice_params = _parse_voice_spec(speaker, spec)
             self._tts_name_by_speaker[speaker] = tts_name
             if voice_params:
                 self._voice_params_by_speaker[speaker] = voice_params
         self._instruct_map        = read_dict(instruct_config) if instruct_config else {}
+        self._warned_instructs: set[tuple[str, str]] = set()
         self._word_patches_map    = read_dict(word_patches) if word_patches else {}
         self._output_file_name    = output
         self._max_lines           = max_lines
@@ -346,7 +411,7 @@ class TTSCommand(CommandBase):
         output.flush()
 
     def _process_text(self, tts: AbstractTTS, sentence: str, instruct: str, waveforms: list[Any],
-                      voice_params: dict[str, int | float] | None = None) -> None:
+                      voice_params: dict[str, Any] | None = None) -> None:
         """Render a single sentence.
 
         :param tts:                     the TTS to use
@@ -368,7 +433,16 @@ class TTSCommand(CommandBase):
             if isinstance(part, str):
                 chunk = self._render_segment(tts, part.strip(), instruct, voice_params)
                 if chunk.size > 0:
-                    waveforms.append(chunk)
+                    effects = voice_params.get("fx")
+                    if effects:
+                        debug(f"Applying effects: {_format_voice_params({'fx': effects})}")
+                        processed = apply_effects(chunk, self._sample_rate, effects)
+                        chunk, tail = processed[:len(chunk)], processed[len(chunk):]
+                        waveforms.append(chunk)
+                        if tail.size:
+                            waveforms.append(_Tail(tail))
+                    else:
+                        waveforms.append(chunk)
                     rendered = True
             else:
                 duration = self._pause_silence_duration if part is None else part
@@ -380,7 +454,7 @@ class TTSCommand(CommandBase):
             waveforms.append(self._silence(pause))
 
     def _render_segment(self, tts: AbstractTTS, text: str, instruct: str,
-                        voice_params: dict[str, int | float]) -> np.ndarray:
+                        voice_params: dict[str, Any]) -> np.ndarray:
         """Renders a piece of text with no pause tags, at the output sample rate.
 
         :param tts:                     the TTS to use
@@ -553,10 +627,26 @@ class TTSCommand(CommandBase):
 
                     tts = self._tts_by_name[tts_name]
                     voice_params = self._voice_params_by_speaker.get(speaker, {})
+                    tts_instruct = instruct
+
+                    # An instruct naming effects (e.g. [Claire, telefono]:) applies them on the fly,
+                    # unless an explicit speaker+instruct variant exists in the voices config.
+                    instruct_effects = _effects_or_none(instruct) if speaker != speaker_variant else None
+                    if instruct_effects:
+                        voice_params = {**voice_params, "fx": voice_params.get("fx", []) + instruct_effects}
+                        tts_instruct = "default"
 
                     if not dry_run and (prev_speaker != speaker or prev_instruct != instruct):
                         log(f"Changed speaker: {yellow(speaker)}, voice: {yellow(tts_name)}, instruct: {yellow(instruct)}"
-                            + (f", params: {yellow(str(voice_params))}" if voice_params else ""))
+                            + (" (as effect)" if instruct_effects else "")
+                            + (f", params: {yellow(_format_voice_params(voice_params))}" if voice_params else ""))
+
+                    if instruct != "default" and speaker != speaker_variant and not instruct_effects:
+                        instruct_key = f"{tts.prefix()}.{instruct}"
+                        if instruct_key not in self._instruct_map and (speaker, instruct) not in self._warned_instructs:
+                            self._warned_instructs.add((speaker, instruct))
+                            warning(f"{file_name}, line {l}: instruct '{instruct}' has no effect for speaker '{speaker}': "
+                                    f"no '{speaker_variant}' in the voices config and no '{instruct_key}' in the instruct config")
 
                     if speaker != "default" and line and not line[-1] in string.punctuation:
                         line = f"{line}."
@@ -566,7 +656,7 @@ class TTSCommand(CommandBase):
                             words = count_words(line)
                             self._word_count += words
                             log(f"{file_name}[ {l: >3}   ]: ({words : >3} words): {cyan(line)}")
-                            self._process_text(tts, line, instruct, waveforms, voice_params)
+                            self._process_text(tts, line, tts_instruct, waveforms, voice_params)
                     else:
                         sentences = re.split(r'(?<=[.;:!?])\s+|\s*\.{3}\s*', line)
                         if not dry_run:
@@ -574,11 +664,11 @@ class TTSCommand(CommandBase):
                                 words = count_words(sentence)
                                 self._word_count += words
                                 log(f"{file_name}[ {l: >3}.{s:<2}]: ({words : >3} words): {cyan(sentence)}")
-                                self._process_text(tts, sentence.strip(), instruct, waveforms, voice_params)
+                                self._process_text(tts, sentence.strip(), tts_instruct, waveforms, voice_params)
 
                 waveforms.append(self._silence(self._new_line_silence_duration))
 
-        return waveforms
+        return _mix_tails(waveforms)
 
     def generate_wav_from_file(self, input_file_path: str) -> None:
         """Renders text in a file.
