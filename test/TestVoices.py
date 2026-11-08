@@ -26,7 +26,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from book_assistant.Commons import log
+# from book_assistant.Commons import log
 
 # Matches the speaker tag at the start of a line, e.g. [Anna, malinconica]:
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^\]]+?)\s*\]\s*:')
@@ -186,6 +186,9 @@ def main() -> int:
 
     log(f"\nDone: {rendered} rendered, {skipped} skipped, {errors} error(s).")
     return 0 if errors == 0 else 1
+
+def log(message: str, new_line: bool = True) -> None:
+    print(message + ("" if new_line else "\033[K"), file=sys.stderr, end="\n" if new_line else "\r")
 
 
 if __name__ == '__main__':
