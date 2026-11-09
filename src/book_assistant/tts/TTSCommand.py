@@ -86,10 +86,32 @@ _FLOAT_PARAMS = {"temperature", "top_p", "repetition_penalty",
 _ALL_PARAMS   = _INT_PARAMS | _FLOAT_PARAMS
 # Parameters that any voice accepts, because they are applied by BookAssistant itself
 # after generation. All the others are Qwen3 sampling parameters.
-_UNIVERSAL_PARAMS = {"speed", "fx"}
+_UNIVERSAL_PARAMS = {"speed", "fx", "loudness"}
 _PARAM_ALIASES = {"temp": "temperature"}
+_LOUDNESS_KEYS = {"loudness", "l"}
+_LOUDNESS_RANGE = (-40.0, 20.0)
 _FX_KEYS = {"fx", "effect", "effects", "effetto", "effetti", "effet", "effets"}
 _VOICE_PARAMS_SEPARATOR = ";"
+
+
+def _parse_loudness(val: str, context: str) -> float:
+    """Parses a loudness correction in dB, e.g. ``-4.5`` or ``+3dB``.
+
+    :param val:                     the raw value
+    :param context:                 where the parameter comes from, for error messages
+    :return:                        the gain in dB
+    """
+    text = val.strip()
+    if text.lower().endswith("db"):
+        text = text[:-2].strip()
+    try:
+        gain = float(text)
+    except ValueError:
+        raise ValueError(f"{context}: invalid loudness '{val}': expected a value in dB, e.g. -4.5 or +3") from None
+    low, high = _LOUDNESS_RANGE
+    if not low <= gain <= high:
+        raise ValueError(f"{context}: loudness {gain} dB out of range [{low}, {high}]")
+    return gain
 
 
 def _convert_param(key: str, val: str, context: str) -> int | float:
@@ -242,6 +264,8 @@ def _format_voice_params(params: dict[str, Any]) -> str:
     def value(key, val):
         if key == "fx":
             return "+".join(f"{effect}{level or ''}" for effect, level in val)
+        if key == "loudness":
+            return f"{val:+g} dB"
         return str(val)
     return ", ".join(f"{key}={value(key, val)}" for key, val in params.items())
 
@@ -267,6 +291,9 @@ def _parse_voice_spec(speaker: str, spec: str) -> tuple[str, dict[str, Any]]:
         if not sep:
             raise ValueError(f"{context}: expected 'key=value', got '{item}'")
         key = key.strip()
+        if key.lower() in _LOUDNESS_KEYS:
+            params["loudness"] = _parse_loudness(val, context)
+            continue
         if key.lower() in _FX_KEYS:
             try:
                 params["fx"] = parse_effects(val)
@@ -386,6 +413,7 @@ class TTSCommand(CommandBase):
                 self._voice_params_by_speaker[speaker] = voice_params
         self._instruct_map        = read_dict(instruct_config) if instruct_config else {}
         self._warned_instructs: set[tuple[str, str]] = set()
+        self._loudness_clip_warned: set[float] = set()
         self._word_patches_map    = read_dict(word_patches) if word_patches else {}
         self._output_file_name    = output
         self._max_lines           = max_lines
@@ -605,6 +633,18 @@ class TTSCommand(CommandBase):
             if speed and speed != 1.0:
                 debug(f"Applying speed {speed}")
                 chunk = _time_stretch(chunk, self._sample_rate, speed)
+
+            gain = voice_params.get("loudness")
+            if gain:
+                debug(f"Applying loudness {gain:+g} dB")
+                chunk = chunk * np.float32(10 ** (gain / 20))
+                peak = float(np.max(np.abs(chunk)))
+                if peak > 1.0:
+                    if gain not in self._loudness_clip_warned:
+                        self._loudness_clip_warned.add(gain)
+                        warning(f"Loudness {gain:+g} dB makes the audio clip (peak {20 * np.log10(peak):+.1f} dBFS): "
+                                f"consider a lower value")
+                    chunk = np.clip(chunk, -1.0, 1.0)
 
         return chunk
 
