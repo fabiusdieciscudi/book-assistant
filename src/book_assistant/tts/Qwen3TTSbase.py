@@ -11,7 +11,7 @@ from typing import Optional
 import numpy as np
 
 from .AbstractTTS import AbstractTTS
-from book_assistant.Commons import warning
+from book_assistant.Commons import debug
 
 CLONE_PROMPT  = 'clone'
 DESIGN_PROMPT = 'design'
@@ -151,7 +151,7 @@ class _Qwen3TTSBase(AbstractTTS):
             self._params = saved
 
     def close(self):
-        warning(f"Unloading Qwen3-MLX ({self._model_size}) from '{self._model_name}'")
+        debug(f"Unloading Qwen3 ({self._model_size}) from '{self._model_name}'")
 
         if hasattr(self, '_initialized') and self._initialized:
             del self._model
