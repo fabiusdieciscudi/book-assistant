@@ -2,7 +2,7 @@ import gc
 from collections import OrderedDict
 
 from .AbstractTTS import AbstractTTS
-from book_assistant.Commons import warning
+from book_assistant.Commons import debug
 
 class LRUModelCache:
     """Keeps at most `capacity` TTS models loaded at once."""
@@ -26,7 +26,7 @@ class LRUModelCache:
         # evict LRU if at capacity
         while len(self._cache) >= self._capacity:
             evicted_name, evicted_model = self._cache.popitem(last=False)
-            warning(f"LRU close: {evicted_name}")
+            debug(f"LRU close: {evicted_name}")
             evicted_model.close()
             gc.collect()
 
@@ -34,5 +34,5 @@ class LRUModelCache:
         self._cache[name] = model
         self._cache.move_to_end(name)
         model.ensure_initialized()
-        warning(f"Loaded models: {sorted(self._cache.keys())}")
+        debug(f"Loaded models: {sorted(self._cache.keys())}")
         return model

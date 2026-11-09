@@ -103,7 +103,7 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
 
         ids = self._tokenizer.encode(text)
         tokens = [self._tokenizer.decode([id]) for id in ids]
-        log(f"tokenize: {' | '.join(t for t in tokens)}")
+        debug(f"tokenize: {' | '.join(t for t in tokens)}")
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_path = tmp.name
