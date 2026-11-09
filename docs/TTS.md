@@ -222,7 +222,10 @@ Honorat:    Qwen3:039M;temp=0.7;top_p=0.9
 
 - The keys are the same as in [Qwen3 Generation Parameters](#qwen3-generation-parameters); `temp` is accepted as a short form of `temperature`.
 - They override the session-wide `--qwen3-params` values for that speaker only; the other parameters keep the session values.
-- `speed` and `fx` (see [Audio effects](#audio-effects)) work with every voice, because BookAssistant applies them after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
+- `speed`, `fx` (see [Audio effects](#audio-effects)) and `loudness` work with every voice, because BookAssistant applies them after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
+- `loudness` (short form `l`) is a volume correction in dB, applied before the effects: `l=-4.5` lowers the voice by 4.5 dB (about 60% of the amplitude), `loudness=+3dB` raises it by 3 dB. Accepted range: −40 to +20 dB. If a positive value makes the audio clip, a warning is shown and the peaks are clipped.
+
+  To compute it, measure the integrated loudness of a sample generated with each voice, e.g. `ffmpeg -nostats -i sample.wav -af ebur128=peak=true -f null -`, then use *target − measured*, where the target is the level you want all voices to have (e.g. −21 LUFS).
 - A speaker+instruct variant (`Virgilio.grave`) can carry its own parameters.
 
 #### Audio effects
