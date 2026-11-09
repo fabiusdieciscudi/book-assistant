@@ -429,18 +429,22 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 
 ## Scenes and chapters
 
-A line containing only `[scene:<name>]` marks the start of a scene:
+A line containing only `[scene:<name>]` marks the start of a scene, and `[beat:<name>]` the start of a beat inside it:
 
 ```
 [scene:Il treno]
+[beat:La partenza]
 [Lilith]: Siamo in ritardo.
+[beat:Il controllore]
 [scene:L'arrivo]
 ```
 
-- With MP3 output, each scene becomes a chapter in the file's ID3v2.3 tag (`CHAP` frames plus a top-level `CTOC` table of contents titled with the input file name). A chapter lasts until the next scene, or until the end of the audio.
-- The audio before the first scene tag is not part of any chapter.
-- With WAV output the scenes are only logged, with a warning that chapters require MP3.
-- The tag must be alone on its line, and the name can't be empty: otherwise the run stops during validation.
+- With MP3 output, scenes and beats become chapters in the file's ID3v2.3 tag (`CHAP` frames plus a top-level `CTOC` table of contents titled with the input file name).
+- They are numbered progressively, so that a flat chapter list still shows the structure: `1. Il treno`, `1.1. La partenza`, `1.2. Il controllore`, `2. L'arrivo`. The beat numbering restarts at each scene, and the scene numbering at each input file.
+- A scene lasts until the next scene, so it spans its beats; a beat lasts until the next beat or scene. When a beat starts together with its scene, both chapters start at the same time, the scene first.
+- The audio before the first scene tag is not part of any chapter. A beat before the first scene stops the run during validation.
+- With WAV output scenes and beats are only logged, with a warning that chapters require MP3.
+- The tags must be alone on their line, and the name can't be empty: otherwise the run stops during validation.
 - The name can contain any character except `]`.
 - On macOS, the chapters are shown by IINA (in the playlist sidebar, *Chapters* tab) and by the Finder's Quick Look; Apple Music and QuickTime Player ignore them.
 

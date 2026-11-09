@@ -30,9 +30,9 @@ from .LRUModelCache import LRUModelCache
 
 _TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
-# Scene tag, alone on a line: [scene:<name>]. It starts a chapter in the MP3 output.
-_SCENE_LINE_PATTERN = re.compile(r'^\[\s*scene\s*:([^\]]*)\]$', re.IGNORECASE)
-_SCENE_ANY_PATTERN  = re.compile(r'\[\s*scene\b', re.IGNORECASE)
+# Scene and beat tags, alone on a line: [scene:<name>], [beat:<name>]. Each starts a chapter in the MP3 output.
+_MARK_LINE_PATTERN = re.compile(r'^\[\s*(scene|beat)\s*:([^\]]*)\]$', re.IGNORECASE)
+_MARK_ANY_PATTERN  = re.compile(r'\[\s*(scene|beat)\b', re.IGNORECASE)
 # Inline pause tag: [pause] or [pause:<seconds>], e.g. [pause:1.5].
 _PAUSE_TAG_PATTERN = re.compile(r'\[\s*pause\b([^\]]*)\]', re.IGNORECASE)
 _PAUSE_ARG_PATTERN = re.compile(r'^\s*:\s*(\d+(?:\.\d+)?)\s*s?\s*$')
@@ -370,7 +370,9 @@ class TTSCommand(CommandBase):
                timestamps=None,
                dry_run=False) -> None:
         self._labels_file_name    = timestamps
-        self._scenes: list[tuple[int, str]] = []
+        self._marks: list[tuple[int, str, str]] = []      # (position in samples, "scene" or "beat", numbered title)
+        self._scene_number        = 0
+        self._beat_number         = 0
         self._toc_title           = ""
         self._labels: list[tuple[float, float, str]] = []
         self._speech_end_samples  = 0
@@ -469,12 +471,16 @@ class TTSCommand(CommandBase):
         self._tts_by_name = LRUModelCache(tts_by_name, capacity=max_loaded_models)
 
     def _chapters(self, total_samples: int) -> list[tuple[float, float, str]]:
-        """Returns the scenes as chapters (start and end in seconds, title): each one lasts until the next."""
+        """Returns the scenes and beats as a single, flat list of chapters (start and end in seconds, title).
+
+        A scene lasts until the next scene, so it spans its beats; a beat lasts until the next scene or beat.
+        """
         result = []
-        for i, (start, name) in enumerate(self._scenes):
-            end = self._scenes[i + 1][0] if i + 1 < len(self._scenes) else total_samples
+        for i, (start, kind, title) in enumerate(self._marks):
+            following = [p for p, k, _ in self._marks[i + 1:] if kind == "beat" or k == "scene"]
+            end = following[0] if following else total_samples
             if end > start:
-                result.append((start / self._sample_rate, end / self._sample_rate, name))
+                result.append((start / self._sample_rate, end / self._sample_rate, title))
         return result
 
     def _timestamp(self, samples: int) -> str:
@@ -513,9 +519,9 @@ class TTSCommand(CommandBase):
         if chapters:
             if self._format.upper() == "MP3":
                 output.write(chapters_tag(chapters, self._toc_title))
-                log(f"Chapters: {len(chapters)} scenes written to the MP3 tag")
+                log(f"Chapters: {len(chapters)} scenes and beats written to the MP3 tag")
             else:
-                warning(f"{len(chapters)} scenes found, but chapters are only written in MP3 output")
+                warning(f"{len(chapters)} scenes and beats found, but chapters are only written in MP3 output")
         output.write(buffer.read())
         output.flush()
 
@@ -683,8 +689,10 @@ class TTSCommand(CommandBase):
         """
         log(f"{'Processing' if not dry_run else 'Validating'}: {input_file_path}")
         file_name = Path(input_file_path).name
+        self._scene_number = 0
+        self._beat_number = 0
         if not dry_run:
-            self._scenes = []
+            self._marks = []
             self._toc_title = Path(input_file_path).stem
 
         with open(input_file_path, "r", encoding="utf-8") as lines_source:
@@ -699,18 +707,27 @@ class TTSCommand(CommandBase):
                 if line and not line.startswith("#"):
                     line = line.translate(_CHAR_TRANSLATIONS).strip()
 
-                    scene = _SCENE_LINE_PATTERN.match(line)
-                    if scene:
-                        name = scene.group(1).strip()
+                    mark = _MARK_LINE_PATTERN.match(line)
+                    if mark:
+                        kind, name = mark.group(1).lower(), mark.group(2).strip()
                         if not name:
-                            raise ValueError(f"{file_name}, line {l}: scene tag without a name")
+                            raise ValueError(f"{file_name}, line {l}: {kind} tag without a name")
+                        if kind == "scene":
+                            self._scene_number += 1
+                            self._beat_number = 0
+                            title = f"{self._scene_number}. {name}"
+                        else:
+                            if self._scene_number == 0:
+                                raise ValueError(f"{file_name}, line {l}: beat '{name}' before the first scene")
+                            self._beat_number += 1
+                            title = f"{self._scene_number}.{self._beat_number}. {name}"
                         if not dry_run:
                             position = _samples(waveforms)
-                            log(f"{file_name}[ {l: >3}   ]: scene '{name}' @{_format_time(position / self._sample_rate)}")
-                            self._scenes.append((position, name))
+                            log(f"{file_name}[ {l: >3}   ]: {kind} '{title}' @{_format_time(position / self._sample_rate)}")
+                            self._marks.append((position, kind, title))
                         continue
-                    if _SCENE_ANY_PATTERN.search(line):
-                        raise ValueError(f"{file_name}, line {l}: a scene tag must be alone on its line: {line}")
+                    if _MARK_ANY_PATTERN.search(line):
+                        raise ValueError(f"{file_name}, line {l}: a scene or beat tag must be alone on its line: {line}")
 
                     try:
                         parts = _split_pauses(line)
