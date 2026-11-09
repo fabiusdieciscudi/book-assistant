@@ -216,17 +216,14 @@ This takes precedence over the plain `Virgilio` mapping when the instruct is `gr
 A voice name can be followed by generation parameters that apply only to that speaker, each introduced by `;` and written as `key=value`:
 
 ```
-Lilith:     Qwen3:F-eA-pN-tG-vN-008;temperature=0.9;speed=0.9
-Honorat:    Qwen3:M-eA-pN-tG-vN-009;temp=0.7;top_p=0.9
-Virgilio:   MacOS:Luca;speed=1.1
+Claire:     Qwen3:008F;temperature=0.9;speed=0.9
+Honorat:    Qwen3:039M;temp=0.7;top_p=0.9
 ```
 
 - The keys are the same as in [Qwen3 Generation Parameters](#qwen3-generation-parameters); `temp` is accepted as a short form of `temperature`.
 - They override the session-wide `--qwen3-params` values for that speaker only; the other parameters keep the session values.
 - `speed` and `fx` (see [Audio effects](#audio-effects)) work with every voice, because BookAssistant applies them after generation. All the other keys are Qwen3 sampling parameters and are rejected for non-Qwen3 voices.
 - A speaker+instruct variant (`Virgilio.grave`) can carry its own parameters.
-
-`;` is used because `:` already appears in voice names (`Qwen3:…`) and `#` starts a comment.
 
 #### Audio effects
 
