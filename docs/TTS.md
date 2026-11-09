@@ -427,6 +427,23 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 - Character translations are applied automatically: curly quotes become straight quotes, `…` becomes `...`.
 - Models are downloaded from HuggingFace on first use and cached locally; subsequent runs work fully offline.
 
+## Scenes and chapters
+
+A line containing only `[scene:<name>]` marks the start of a scene:
+
+```
+[scene:Il treno]
+[Lilith]: Siamo in ritardo.
+[scene:L'arrivo]
+```
+
+- With MP3 output, each scene becomes a chapter in the file's ID3v2.3 tag (`CHAP` frames plus a top-level `CTOC` table of contents titled with the input file name). A chapter lasts until the next scene, or until the end of the audio.
+- The audio before the first scene tag is not part of any chapter.
+- With WAV output the scenes are only logged, with a warning that chapters require MP3.
+- The tag must be alone on its line, and the name can't be empty: otherwise the run stops during validation.
+- The name can contain any character except `]`.
+- On macOS, the chapters are shown by IINA (in the playlist sidebar, *Chapters* tab) and by the Finder's Quick Look; Apple Music and QuickTime Player ignore them.
+
 ## Labels
 
 With `--labels <file>`, BookAssistant writes one line per rendered text line:

@@ -23,12 +23,16 @@ from .PiperTTS import PiperTTS
 from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
 from .AudioEffects import parse_effects, apply_effects
+from .Id3Chapters import chapters_tag
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
 
 _TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
+# Scene tag, alone on a line: [scene:<name>]. It starts a chapter in the MP3 output.
+_SCENE_LINE_PATTERN = re.compile(r'^\[\s*scene\s*:([^\]]*)\]$', re.IGNORECASE)
+_SCENE_ANY_PATTERN  = re.compile(r'\[\s*scene\b', re.IGNORECASE)
 # Inline pause tag: [pause] or [pause:<seconds>], e.g. [pause:1.5].
 _PAUSE_TAG_PATTERN = re.compile(r'\[\s*pause\b([^\]]*)\]', re.IGNORECASE)
 _PAUSE_ARG_PATTERN = re.compile(r'^\s*:\s*(\d+(?:\.\d+)?)\s*s?\s*$')
@@ -213,6 +217,11 @@ def _read_clone_config(file_paths: str | list[str]) -> dict[str, str]:
     return result
 
 
+def _format_time(seconds: float) -> str:
+    """Formats seconds as hh:mm:ss.mmm."""
+    return f"{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{seconds % 60:06.3f}"
+
+
 def _samples(waveforms: list[Any]) -> int:
     """Returns the number of samples in *waveforms*, ignoring the effect tails (they don't add length)."""
     return sum(len(w) for w in waveforms if not isinstance(w, _Tail))
@@ -361,6 +370,8 @@ class TTSCommand(CommandBase):
                timestamps=None,
                dry_run=False) -> None:
         self._labels_file_name    = timestamps
+        self._scenes: list[tuple[int, str]] = []
+        self._toc_title           = ""
         self._labels: list[tuple[float, float, str]] = []
         self._speech_end_samples  = 0
         raw_voice_map             = read_dict(voice_config) if voice_config else {}
@@ -457,12 +468,20 @@ class TTSCommand(CommandBase):
         _dump_config("Per-voice params",   self._voice_params_by_speaker)
         self._tts_by_name = LRUModelCache(tts_by_name, capacity=max_loaded_models)
 
+    def _chapters(self, total_samples: int) -> list[tuple[float, float, str]]:
+        """Returns the scenes as chapters (start and end in seconds, title): each one lasts until the next."""
+        result = []
+        for i, (start, name) in enumerate(self._scenes):
+            end = self._scenes[i + 1][0] if i + 1 < len(self._scenes) else total_samples
+            if end > start:
+                result.append((start / self._sample_rate, end / self._sample_rate, name))
+        return result
+
     def _timestamp(self, samples: int) -> str:
         """Formats a position in the output for the log, only when labels are being written."""
         if not self._labels_file_name:
             return ""
-        seconds = samples / self._sample_rate
-        return f"@{int(seconds // 3600):02d}:{int(seconds % 3600 // 60):02d}:{seconds % 60:06.3f} "
+        return f"@{_format_time(samples / self._sample_rate)} "
 
     def _write_labels(self) -> None:
         """Writes the position of each rendered line, in the Audacity label format:
@@ -490,6 +509,13 @@ class TTSCommand(CommandBase):
             case _:
                 raise ValueError(f"Unsupported format: {self._format}")
         buffer.seek(0)
+        chapters = self._chapters(len(full_waveform))
+        if chapters:
+            if self._format.upper() == "MP3":
+                output.write(chapters_tag(chapters, self._toc_title))
+                log(f"Chapters: {len(chapters)} scenes written to the MP3 tag")
+            else:
+                warning(f"{len(chapters)} scenes found, but chapters are only written in MP3 output")
         output.write(buffer.read())
         output.flush()
 
@@ -657,6 +683,9 @@ class TTSCommand(CommandBase):
         """
         log(f"{'Processing' if not dry_run else 'Validating'}: {input_file_path}")
         file_name = Path(input_file_path).name
+        if not dry_run:
+            self._scenes = []
+            self._toc_title = Path(input_file_path).stem
 
         with open(input_file_path, "r", encoding="utf-8") as lines_source:
             waveforms = []
@@ -669,6 +698,20 @@ class TTSCommand(CommandBase):
 
                 if line and not line.startswith("#"):
                     line = line.translate(_CHAR_TRANSLATIONS).strip()
+
+                    scene = _SCENE_LINE_PATTERN.match(line)
+                    if scene:
+                        name = scene.group(1).strip()
+                        if not name:
+                            raise ValueError(f"{file_name}, line {l}: scene tag without a name")
+                        if not dry_run:
+                            position = _samples(waveforms)
+                            log(f"{file_name}[ {l: >3}   ]: scene '{name}' @{_format_time(position / self._sample_rate)}")
+                            self._scenes.append((position, name))
+                        continue
+                    if _SCENE_ANY_PATTERN.search(line):
+                        raise ValueError(f"{file_name}, line {l}: a scene tag must be alone on its line: {line}")
+
                     try:
                         parts = _split_pauses(line)
                     except ValueError as e:
