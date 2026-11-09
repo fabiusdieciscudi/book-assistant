@@ -3,12 +3,14 @@
 # SPDX-FileCopyrightText: © 2026-present Fabius Dieciscudi
 # SPDX-License-Identifier: MIT
 
+import contextlib
 import os
+import sys
 import tempfile
 import numpy as np
 import soundfile as sf
 from pathlib import Path
-from book_assistant.Commons import debug, is_debug, log
+from book_assistant.Commons import debug, is_debug
 from .Qwen3TTSbase import _Qwen3TTSBase, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, _VOICE_NAMES, \
     _BASE_MODEL_MLX, _CUSTOM_VOICE_MODEL_MLX, _VOICE_DESIGN_MODEL_MLX
 
@@ -57,11 +59,17 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         # Both are WARNING-level noise; suppress them for the duration of the load.
         prev_verbosity = hf_logging.get_verbosity()
         hf_logging.set_verbosity_error()
+        # mlx_audio prints its own loading messages ("Initialized encoder codebooks", "Loaded speech
+        # tokenizer …") on stdout, which may also be the audio output: show them on stderr in debug mode only.
+        library_output = sys.stderr if is_debug() else open(os.devnull, "w")
         try:
-            self._model = load_model(Path(local_path))
-            self._tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
+            with contextlib.redirect_stdout(library_output):
+                self._model = load_model(Path(local_path))
+                self._tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
         finally:
             hf_logging.set_verbosity(prev_verbosity)
+            if library_output is not sys.stderr:
+                library_output.close()
 
     def _extra_close(self):
         import mlx.core as mx
