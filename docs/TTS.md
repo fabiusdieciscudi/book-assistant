@@ -416,6 +416,8 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | `--max-loaded-models <n>`     | Maximum number of voices to keep in memory simultaneously (default: 5). |
 | `--max-lines <n>`             | Stop after processing this many lines (default: all).                   |
 | `--dry-run`                   | Validate speaker/voice assignments without rendering audio.             |
+| `--sounds-config <file>`         | Sounds used in the text, mapped to sound files mnemonics. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
+| `--sound-files-config <file>`    | Sound files, by mnemonic. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--timestamps <file>`         | Write the position of each line in the generated audio to *file*, in the Audacity label format (start and end in seconds, then the line's text, separated by tabs), and show each line's start time in the log. See [Labels](#labels). |
 | `--list-unused`               | List the available voices that no speaker uses in the voices config, grouped by engine, plus the assigned voices that don't exist. No file to process is needed. |
 | `--debug`                     | Enable verbose logging.                                                 |
@@ -429,6 +431,93 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 - The input file is always validated before rendering begins, so speaker/voice errors are caught upfront.
 - Character translations are applied automatically: curly quotes become straight quotes, `…` becomes `...`.
 - Models are downloaded from HuggingFace on first use and cached locally; subsequent runs work fully offline.
+
+## Ambience and sound effects
+
+Like the radio dramas of the 1930s, a text can have a background ambience and sound effects.
+
+### Sounds config
+
+Sounds are configured on two levels, as voices are configured with the voices config and the Qwen3 clone config.
+
+The **sound files config** (`--sound-files-config`, like the clone config) maps a mnemonic to an audio file:
+
+```
+FS.123456:  freesound/123456-heavy-rain.flac
+FS.234567:  freesound/234567-busy-cafe.wav
+FS.98765:   freesound/98765-door-knock.wav
+```
+
+- The file can be WAV, FLAC, OGG or MP3; it is converted to the output sample rate when first used. A stereo file is kept stereo,
+  files with any other number of channels are converted to mono.
+- The voices are mono, so the output starts as mono. If a stereo sound is used (as an effect or as an ambience),
+  the whole output becomes stereo, with the voices in the centre (the same signal in both channels), and a warning
+  names the first stereo sound. In MP3 this costs very little: two identical channels take about as much as one.
+- A relative path is resolved against the folder of the config file.
+
+The **sounds config** (`--sounds-config`, like the voices config) maps the names used in the text to a mnemonic, with optional parameters:
+
+```
+pioggia:    FS.123456;loudness=-24
+caffè:      FS.234567;l=-28
+bussare:    FS.98765
+```
+
+- `loudness=<dB>` (alias `l`) is a correction applied every time the sound is used. Ambiences usually need a strongly negative value, so that they stay well below the voices.
+- A mnemonic that isn't in the sound files config stops the run at startup.
+- As a speaker can be a voice name, a name used in the text can also be a mnemonic directly (`[sfx:FS.98765]`), with no correction.
+
+Both options can be repeated.
+
+### Ambiences
+
+A line containing only `[ambient:<name>]` starts a background sound, which is repeated in a loop (with a short crossfade at each repetition) until the next `[ambient:…]` line, or until the end of the file:
+
+```
+[ambient:pioggia]
+[Anna;loudness=-6;fade=3]
+[ambient:off]
+```
+
+- `fade=<seconds>` (default 1) is the fade-in of the new ambience, and also the crossfade with the one it replaces. `[ambient:off]` fades the ambience out.
+- `loudness=<dB>` (alias `l`) is added to the loudness set in the sounds config.
+- `delay=<seconds>` starts the change that many seconds after the point of the tag, while the narration goes on; it also works with `[ambient:off]`.
+- `repeat=off` plays the ambience only once, instead of looping it: if the sound is shorter than the text it accompanies, it ends before the next change. The default is `repeat=on`.
+- `skip`, `cut` and `duration` select the part of the file to use (see below); the loop repeats only that part.
+- Ambiences are mixed under everything, voices and pauses alike, after all the lines have been rendered.
+
+### Sound effects
+
+`[sfx:<name>]` plays a sound effect at that point of a line, or on a line of its own:
+
+```
+[Narratore]: Bussarono alla porta.[sfx:bussare] Nessuno si mosse.
+[sfx:tuono;overlay;loudness=-3;fade=0.5]
+```
+
+- By default the effect is played **in sequence**: the narration stops, the effect plays, then the narration goes on.
+- With `overlay` the effect is **mixed over** what follows, without stopping the narration.
+- `delay=<seconds>` starts the effect that many seconds after the point of the tag: in sequence the narration waits in silence for the delay too, with `overlay` the effect starts that far into what follows.
+- `fade=<seconds>` adds a fade-in and a fade-out of that length to the effect (at most half of its duration each). By default the effect is played as it is, with no fades.
+- `loudness=<dB>` (alias `l`) is added to the base loudness of the sound.
+- A line containing only sound effects and pauses needs no speaker.
+
+### Selecting part of a sound
+
+Both `[ambient:…]` and `[sfx:…]` accept three options, in seconds, that select the part of the file to use:
+
+```
+[sfx:tuono;skip=1.5;duration=4]
+[ambient:caffè;skip=10;cut=5]
+```
+
+- `skip=<seconds>` drops the start of the file.
+- `cut=<seconds>` drops the end of the file.
+- `duration=<seconds>` keeps at most that much, starting after `skip`.
+
+They are applied before the fades. If `skip` and `cut` together leave nothing of the file, the run stops during validation.
+
+Unknown sounds, unknown options and ambient tags inside a line stop the run during validation, with the file name and line number. In LaTeX these tags are produced by `\ambient` and `\sfx`.
 
 ## Scenes and chapters
 
