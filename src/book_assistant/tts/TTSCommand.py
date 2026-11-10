@@ -24,6 +24,7 @@ from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
 from .AudioEffects import parse_effects, apply_effects
 from .Id3Chapters import chapters_tag
+from .Sounds import SoundLibrary, Sfx, Ambient, parse_sound_tag, mix_ambience, faded, trimmed, delayed, check_sound, is_stereo, as_stereo, DEFAULT_FADE
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
@@ -34,7 +35,10 @@ _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s
 _MARK_LINE_PATTERN = re.compile(r'^\[\s*(scene|beat)\s*:([^\]]*)\]$', re.IGNORECASE)
 _MARK_ANY_PATTERN  = re.compile(r'\[\s*(scene|beat)\b', re.IGNORECASE)
 # Inline pause tag: [pause] or [pause:<seconds>], e.g. [pause:1.5].
-_PAUSE_TAG_PATTERN = re.compile(r'\[\s*pause\b([^\]]*)\]', re.IGNORECASE)
+_PAUSE_TAG_PATTERN = re.compile(r'\[\s*(pause|sfx)\b([^\]]*)\]', re.IGNORECASE)
+# Ambience tag, alone on a line: [ambient:<name>;loudness=…;fade=…] or [ambient:off].
+_AMBIENT_LINE_PATTERN = re.compile(r'^\[\s*ambient\s*:([^\]]*)\]$', re.IGNORECASE)
+_AMBIENT_ANY_PATTERN  = re.compile(r'\[\s*ambient\b', re.IGNORECASE)
 _PAUSE_ARG_PATTERN = re.compile(r'^\s*:\s*(\d+(?:\.\d+)?)\s*s?\s*$')
 _CHAR_TRANSLATIONS = str.maketrans({"’": "'", "…": "...", '“': '"', '”': '"'})
 _DEFAULT_PAUSE_LINES: set[str] = {"", "***"}
@@ -140,6 +144,13 @@ class _Tail:
         self.samples = samples
 
 
+def _same_channels(waveforms: list[Any]) -> list[Any]:
+    """If any waveform (or effect tail) is stereo, returns all of them as stereo; otherwise returns them unchanged."""
+    if not any(is_stereo(w.samples if isinstance(w, _Tail) else w) for w in waveforms):
+        return waveforms
+    return [_Tail(as_stereo(w.samples)) if isinstance(w, _Tail) else as_stereo(w) for w in waveforms]
+
+
 def _mix_tails(waveforms: list[Any]) -> list[Any]:
     """Mixes each effect tail over the following waveforms (usually the pause after the line),
     so that echo and reverb don't make the output longer.
@@ -147,6 +158,7 @@ def _mix_tails(waveforms: list[Any]) -> list[Any]:
     :param waveforms:               the waveforms, possibly containing :class:`_Tail` markers
     :return:                        the waveforms with the tails mixed in
     """
+    waveforms = _same_channels(waveforms)
     result = []
     pending: np.ndarray | None = None
     for item in waveforms:
@@ -154,7 +166,7 @@ def _mix_tails(waveforms: list[Any]) -> list[Any]:
             if pending is None or pending.size == 0:
                 pending = item.samples.copy()
             else:
-                longer = np.zeros(max(len(pending), len(item.samples)), dtype=np.float32)
+                longer = np.zeros((max(len(pending), len(item.samples)),) + pending.shape[1:], dtype=np.float32)
                 longer[:len(pending)] += pending
                 longer[:len(item.samples)] += item.samples
                 pending = longer
@@ -170,19 +182,27 @@ def _mix_tails(waveforms: list[Any]) -> list[Any]:
     return result
 
 
-def _split_pauses(text: str) -> list[str | float | None]:
-    """Splits *text* at the inline pause tags.
+def _split_pauses(text: str) -> list[str | float | None | Sfx]:
+    """Splits *text* at the inline pause and sound effect tags.
 
-    :param text:                    the text, possibly containing ``[pause]`` or ``[pause:<seconds>]``
-    :return:                        the text segments (``str``) interleaved with the pauses:
-                                    ``None`` for the default duration, a ``float`` for an explicit one
+    :param text:                    the text, possibly containing ``[pause]``, ``[pause:<seconds>]`` or ``[sfx:<name>…]``
+    :return:                        the text segments (``str``) interleaved with the pauses (``None`` for the
+                                    default duration, a ``float`` for an explicit one) and the effects (``Sfx``)
     """
-    parts: list[str | float | None] = []
+    parts: list[str | float | None | Sfx] = []
     position = 0
     for match in _PAUSE_TAG_PATTERN.finditer(text):
         parts.append(text[position:match.start()])
-        argument = match.group(1)
-        if not argument.strip():
+        kind, argument = match.group(1).lower(), match.group(2)
+        if kind == "sfx":
+            body = argument.strip()
+            if not body.startswith(":"):
+                raise ValueError(f"Invalid sound effect tag '{match.group(0)}': expected [sfx:<name>]")
+            name, options = parse_sound_tag(body[1:], "sfx")
+            parts.append(Sfx(name, options.get("overlay", False), options.get("loudness", 0.0), options.get("fade", 0.0),
+                             options.get("skip", 0.0), options.get("cut", 0.0), options.get("duration"),
+                             options.get("delay", 0.0)))
+        elif not argument.strip():
             parts.append(None)
         else:
             duration = _PAUSE_ARG_PATTERN.match(argument)
@@ -196,10 +216,16 @@ def _split_pauses(text: str) -> list[str | float | None]:
 
 
 def _normalized_pauses(text: str) -> str:
-    """Rewrites the pause tags in a compact form (e.g. ``[ pause : 1.5 ]`` -> ``[pause:1.5]``),
-    so that sentence splitting never cuts through a tag."""
-    return _PAUSE_TAG_PATTERN.sub(lambda m: f"[pause:{_PAUSE_ARG_PATTERN.match(m.group(1)).group(1)}]"
-                                  if m.group(1).strip() else "[pause]", text)
+    """Rewrites the pause and sound effect tags in a compact form (e.g. ``[ pause : 1.5 ]`` -> ``[pause:1.5]``,
+    ``[sfx: germani reali ; overlay]`` -> ``[sfx:germani reali;overlay]``), so that sentence splitting never cuts through a tag."""
+    def compact(m: re.Match) -> str:
+        kind, argument = m.group(1).lower(), m.group(2)
+        if kind == "sfx":
+            # Spaces around ':', ';' and '=' are dropped; those inside a field (e.g. a sound name such as
+            # 'germani reali') are kept, as a single space.
+            return "[sfx" + re.sub(r'\s*([:;=])\s*', r'\1', " ".join(argument.split())) + "]"
+        return f"[pause:{_PAUSE_ARG_PATTERN.match(argument).group(1)}]" if argument.strip() else "[pause]"
+    return _PAUSE_TAG_PATTERN.sub(compact, text)
 
 
 def _time_stretch(chunk: np.ndarray, sample_rate: int, speed: float) -> np.ndarray:
@@ -316,6 +342,8 @@ class TTSCommand(CommandBase):
         parser.add_argument("--instruct-config",              default=None, action="append", help="Voice instruct configuration")
         parser.add_argument("--qwen3-clone-config",           default=None, action="append", help="Configuration for Qwen3 cloned voices")
         parser.add_argument("--qwen3-model-config",           default=None, action="append", help="Extra CustomVoice-compatible Qwen3 checkpoints (name: HF repo_id)")
+        parser.add_argument("--sounds-config",                default=None, action="append", help="Sounds used by [ambient:…] and [sfx:…] (name: mnemonic;loudness=…)")
+        parser.add_argument("--sound-files-config",           default=None, action="append", help="Sound files (mnemonic: audio file)")
         parser.add_argument("--word-patches",                 default=None, action="append", help="Word patches")
         parser.add_argument("--qwen3-params",                 default=None, action="append", help="Qwen3 generation parameters (key:value, e.g. temperature:0.9)")
         parser.add_argument("--max-lines",          type=int, default=99999,                 help="Max. number of lines to process")
@@ -344,6 +372,8 @@ class TTSCommand(CommandBase):
                     qwen3_model_config=args.qwen3_model_config,
                     qwen3_params=args.qwen3_params,
                     word_patches=args.word_patches,
+                    sounds_config=args.sounds_config,
+                    sound_files_config=args.sound_files_config,
                     output=args.output,
                     format=args.format,
                     compression_level=args.compression / 100,
@@ -389,6 +419,8 @@ class TTSCommand(CommandBase):
                qwen3_model_config=None,
                qwen3_params=None,
                word_patches=None,
+               sounds_config=None,
+               sound_files_config=None,
                output=None,
                format="WAV",
                compression_level=0,
@@ -403,6 +435,9 @@ class TTSCommand(CommandBase):
         self._toc_title           = ""
         self._labels: list[tuple[float, float, str]] = []
         self._speech_end_samples  = 0
+        self._sounds              = SoundLibrary(sound_files_config, sounds_config)
+        self._ambience: list[Ambient] = []
+        self._stereo = False
         raw_voice_map             = read_dict(voice_config) if voice_config else {}
         self._tts_name_by_speaker = {}
         self._voice_params_by_speaker: dict[str, dict[str, Any]] = {}
@@ -433,6 +468,8 @@ class TTSCommand(CommandBase):
         _dump_config("Word patches",       self._word_patches_map)
         _dump_config("Qwen3 clone map",    qwen3_clone_map)
         _dump_config("Qwen3 model map",    qwen3_model_map)
+        _dump_config("Sound files",        self._sounds.files_as_dict())
+        _dump_config("Sounds",             self._sounds.sounds_as_dict())
 
         tts_by_name = {
             "MacOS:Federica": MacOSTTS("Federica (Premium)", "italian"),
@@ -531,8 +568,12 @@ class TTSCommand(CommandBase):
 
         :param waveforms:               the list of weveforms to write
         """
-        full_waveform = np.concatenate(waveforms)
-        log(f"Total generated samples: {len(full_waveform)}, {len(full_waveform) / self._sample_rate:.1f} seconds")
+        full_waveform = np.concatenate(_same_channels(waveforms))
+        if self._ambience:
+            full_waveform = mix_ambience(full_waveform, self._ambience, self._sounds, self._sample_rate)
+            log(f"Ambience: {sum(1 for e in self._ambience if e.name)} sounds mixed")
+        log(f"Total generated samples: {len(full_waveform)}, {len(full_waveform) / self._sample_rate:.1f} seconds, "
+            f"{'stereo' if is_stereo(full_waveform) else 'mono'}")
         buffer = io.BytesIO()
         match self._format.upper():
             case "WAV":
@@ -588,14 +629,41 @@ class TTSCommand(CommandBase):
                         waveforms.append(chunk)
                     rendered = True
             else:
-                duration = self._pause_silence_duration if part is None else part
-                debug(f"Inline pause: {duration} sec")
-                waveforms.append(self._silence(duration))
+                debug(f"Inline {self._describe_part(part)}")
+                self._append_part(part, waveforms)
 
         self._speech_end_samples = _samples(waveforms)
         pause = tts.pause_after_new_line()
         if rendered and pause:
             waveforms.append(self._silence(pause))
+
+    def _append_part(self, part: float | None | Sfx, waveforms: list[Any]) -> None:
+        """Appends a pause or a sound effect: an effect in sequence takes its own time, an overlaid one
+        is mixed over what follows."""
+        if isinstance(part, Sfx):
+            sound = trimmed(self._sounds.get(part.name, self._sample_rate, part.loudness),
+                            part.skip, part.cut, part.duration, self._sample_rate)
+            sound = delayed(faded(sound, part.fade, self._sample_rate), part.delay, self._sample_rate)
+            waveforms.append(_Tail(sound) if part.overlay else sound)
+        else:
+            waveforms.append(self._silence(self._pause_silence_duration if part is None else part))
+
+    def _check_stereo(self, name: str, file_name: str, line_number: int) -> None:
+        """The voices are mono: the output becomes stereo at the first stereo sound, with a warning."""
+        if not self._stereo and self._sounds.is_stereo(name, self._sample_rate):
+            self._stereo = True
+            warning(f"{file_name}, line {line_number}: sound '{name}' is stereo: the output will be stereo")
+
+    def _describe_part(self, part: float | None | Sfx) -> str:
+        if isinstance(part, Sfx):
+            return (f"sfx '{part.name}'" + (" (overlay)" if part.overlay else "")
+                    + (f" {part.loudness:+g} dB" if part.loudness else "")
+                    + (f" fade {part.fade:g} sec" if part.fade else "")
+                    + (f" skip {part.skip:g} sec" if part.skip else "")
+                    + (f" cut {part.cut:g} sec" if part.cut else "")
+                    + (f" duration {part.duration:g} sec" if part.duration is not None else "")
+                    + (f" delay {part.delay:g} sec" if part.delay else ""))
+        return f"pause {self._pause_silence_duration if part is None else part} sec"
 
     def _render_segment(self, tts: AbstractTTS, text: str, instruct: str,
                         voice_params: dict[str, Any]) -> np.ndarray:
@@ -733,6 +801,8 @@ class TTSCommand(CommandBase):
         self._beat_number = 0
         if not dry_run:
             self._marks = []
+            self._ambience = []
+            self._stereo = False
             self._toc_title = Path(input_file_path).stem
 
         with open(input_file_path, "r", encoding="utf-8") as lines_source:
@@ -769,19 +839,52 @@ class TTSCommand(CommandBase):
                     if _MARK_ANY_PATTERN.search(line):
                         raise ValueError(f"{file_name}, line {l}: a scene or beat tag must be alone on its line: {line}")
 
+                    ambient = _AMBIENT_LINE_PATTERN.match(line)
+                    if ambient:
+                        try:
+                            name, options = parse_sound_tag(ambient.group(1), "ambient")
+                        except ValueError as e:
+                            raise ValueError(f"{file_name}, line {l}: {e}") from None
+                        off = name.lower() == "off"
+                        if not off and name not in self._sounds:
+                            raise ValueError(f"{file_name}, line {l}: unknown sound '{name}' (not in the sounds config nor in the sound files config)"
+                                             f" - valid values: {self._sounds.valid_names()}")
+                        if not off:
+                            check_sound(self._sounds, name, options.get("skip", 0.0), options.get("cut", 0.0),
+                                        f"{file_name}, line {l}")
+                        if not dry_run:
+                            if not off:
+                                self._check_stereo(name, file_name, l)
+                            position = _samples(waveforms) + int(options.get("delay", 0.0) * self._sample_rate)
+                            event = Ambient(position, None if off else name, options.get("loudness", 0.0),
+                                            options.get("fade", DEFAULT_FADE), options.get("repeat", True),
+                                            options.get("skip", 0.0), options.get("cut", 0.0), options.get("duration"))
+                            log(f"{file_name}[ {l: >3}   ]: ambient '{name}' @{_format_time(position / self._sample_rate)}")
+                            self._ambience.append(event)
+                        continue
+                    if _AMBIENT_ANY_PATTERN.search(line):
+                        raise ValueError(f"{file_name}, line {l}: an ambient tag must be alone on its line: {line}")
+
                     try:
                         parts = _split_pauses(line)
                     except ValueError as e:
                         raise ValueError(f"{file_name}, line {l}: {e}") from None
+                    for part in parts:
+                        if isinstance(part, Sfx) and part.name not in self._sounds:
+                            raise ValueError(f"{file_name}, line {l}: unknown sound '{part.name}' (not in the sounds config nor in the sound files config)"
+                                             f" - valid values: {self._sounds.valid_names()}")
+                        if isinstance(part, Sfx):
+                            check_sound(self._sounds, part.name, part.skip, part.cut, f"{file_name}, line {l}")
+                        if isinstance(part, Sfx) and not dry_run:
+                            self._check_stereo(part.name, file_name, l)
                     line = _normalized_pauses(line)
 
-                    # A line with only pause tags needs no voice.
+                    # A line with only pause and sound effect tags needs no voice.
                     if parts and all(not isinstance(part, str) for part in parts):
                         if not dry_run:
                             for part in parts:
-                                duration = self._pause_silence_duration if part is None else part
-                                log(f"{file_name}[ {l: >3}   ]: pause {duration} sec")
-                                waveforms.append(self._silence(duration))
+                                log(f"{file_name}[ {l: >3}   ]: {self._describe_part(part)}")
+                                self._append_part(part, waveforms)
                         waveforms.append(self._silence(self._new_line_silence_duration))
                         continue
 
