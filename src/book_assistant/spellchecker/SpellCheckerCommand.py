@@ -39,12 +39,12 @@ class SpellCheckerCommand(CommandBase):
         parser.add_argument("--dict", action="append", default=None,
                             help="Optional custom dictionary file. Can be repeated.")
 
-    def _run(self, args, path: Path) -> None:
+    def run(self, args) -> None:
         for dict_file in (args.dict or []):
             self._load_dictionary(dict_file)
             log(f"Custom dictionary loaded from: {dict_file}")
         try:
-            self._check(path)
+            super().run(args)
         finally:
             self._close()
 
@@ -73,7 +73,7 @@ class SpellCheckerCommand(CommandBase):
                 if word:
                     self._dictionary[lang].add(word)
 
-    def _check(self, file_path: Path) -> None:
+    def _run(self, args, file_path: Path) -> None:
         current_lang_code = 'it'
         current_lang_name = 'italian'
         accumulator: list[str] = []
