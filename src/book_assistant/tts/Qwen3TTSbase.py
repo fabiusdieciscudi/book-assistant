@@ -127,6 +127,10 @@ AUDIOBOOK_PARAMS = Qwen3Params(
 class _Qwen3TTSBase(AbstractTTS):
     """Shared interface for both backends. Not instantiated directly."""
 
+    # Appended (after a space) to every chunk, not spoken: may keep Qwen3 from swallowing the last syllables.
+    # See https://github.com/QwenLM/Qwen3-TTS/discussions/161 -- set by --qwen3-end-mark, empty by default.
+    end_mark = ""
+
     def __init__(self, voice_name: str, language: str, model_size: str,
                  params: Qwen3Params = None):
         super().__init__("Qwen3", voice_name, language, _SAMPLE_RATE, max_words=250)

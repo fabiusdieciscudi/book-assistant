@@ -45,6 +45,7 @@ class Qwen3TTSpt(_Qwen3TTSBase):
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self.ensure_initialized()
+        text += f" {self.end_mark}" if self.end_mark else ""
 
         p = self._params
         do_sample = p.do_sample()

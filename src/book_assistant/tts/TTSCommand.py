@@ -346,6 +346,7 @@ class TTSCommand(CommandBase):
         parser.add_argument("--sound-files-config",           default=None, action="append", help="Sound files (mnemonic: audio file)")
         parser.add_argument("--word-patches",                 default=None, action="append", help="Word patches")
         parser.add_argument("--qwen3-params",                 default=None, action="append", help="Qwen3 generation parameters (key:value, e.g. temperature:0.9)")
+        parser.add_argument("--qwen3-end-mark",               default="",                    help="Dummy symbol appended to every chunk for Qwen3, e.g. ^ (default: none)")
         parser.add_argument("--max-lines",          type=int, default=99999,                 help="Max. number of lines to process")
         parser.add_argument("--max-loaded-models",  type=int, default=5,                     help="Max. number of models to keep in memory")
         parser.add_argument("--format",                       default="WAV",                 help="Output file format (default: WAV)")
@@ -366,6 +367,7 @@ class TTSCommand(CommandBase):
         self.generate_wav_from_file(str(path))
 
     def _setup_from_args(self, args) -> None:
+        _Qwen3TTSBase.end_mark = args.qwen3_end_mark
         self._setup(voice_config=args.voices_config,
                     instruct_config=args.instruct_config,
                     qwen3_clone_config=args.qwen3_clone_config,

@@ -8,9 +8,12 @@ import tempfile
 import numpy as np
 import soundfile as sf
 from pathlib import Path
-from book_assistant.Commons import debug, is_debug, log
+from book_assistant.Commons import debug, is_debug, log, warning
 from .Qwen3TTSbase import _Qwen3TTSBase, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, _VOICE_NAMES, \
     _BASE_MODEL_MLX, _CUSTOM_VOICE_MODEL_MLX, _VOICE_DESIGN_MODEL_MLX
+
+_FRAMES_PER_SECOND = 12.5      # Qwen3-TTS codec: one token per 80 ms of audio
+
 
 class Qwen3TTSmlx(_Qwen3TTSBase):
 
@@ -69,6 +72,7 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self.ensure_initialized()
+        text += f" {self.end_mark}" if self.end_mark else ""
 
         if self._is_voice_design:
             # Call the model's own method directly rather than the generic
@@ -86,6 +90,7 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
             debug(f"Qwen3-MLX design params: {sampling or 'library defaults'}")
             results = list(self._model.generate_voice_design(
                 text=text, language=self._language, instruct=instruct, **sampling))
+            self._check_token_limit(text, [r.token_count for r in results], p.max_tokens)
             return np.asarray(results[0].audio, dtype=np.float32)
 
         from mlx_audio.tts.generate import generate_audio
@@ -105,8 +110,21 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         tokens = [self._tokenizer.decode([id]) for id in ids]
         debug(f"tokenize: {' | '.join(t for t in tokens)}")
 
+        # generate_audio() doesn't return the results, so the model's generate() is wrapped for the duration
+        # of the call to see how many tokens each segment took, and the limit it was given.
+        token_counts: list[int] = []
+        requested_limit: list[int | None] = []
+        model_generate = self._model.generate
+
+        def observed_generate(*args, **kwargs):
+            requested_limit.append(kwargs.get("max_tokens"))
+            for result in model_generate(*args, **kwargs):
+                token_counts.append(result.token_count)
+                yield result
+
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_path = tmp.name
+        self._model.generate = observed_generate
         try:
             generate_audio(
                 text=text,
@@ -133,14 +151,30 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
 
             if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
                 raise RuntimeError(f"generate_audio silently failed: '{tmp_path}' empty or missing")
+            self._check_token_limit(text, token_counts, requested_limit[0] if requested_limit else p.max_tokens)
 
             audio_np, _ = sf.read(tmp_path)
             if audio_np.ndim == 2:
                 audio_np = np.mean(audio_np, axis=1)
             return audio_np.astype(np.float32)
         finally:
+            del self._model.generate                    # back to the method of the class
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    def _check_token_limit(self, text: str, token_counts: list[int], requested: int | None) -> None:
+        """Warns if a segment used all the tokens it was allowed: generation stopped there, not at the end
+        of the text, so the audio is truncated."""
+        resolve = getattr(self._model, "_resolve_generation_options", None)       # mlx-audio >= 0.6
+        if resolve:
+            limit = resolve(None, requested, None, None, None)["max_tokens"]
+        else:                                                                   # older: the default of generate()
+            limit = requested if requested is not None else 4096
+        for count in token_counts:
+            if count >= limit:
+                excerpt = text if len(text) <= 80 else text[:40] + " … " + text[-40:]
+                warning(f"Qwen3: the audio reached the limit of {limit} tokens ({limit / _FRAMES_PER_SECOND:.0f} sec)"
+                        f" and is probably truncated; split the text or raise max_tokens: '{excerpt}'")
 
     def clone_voice(self, audio: str, text: str, pkl_file: str):
         # MLX doesn't support voice cloning via pkl
