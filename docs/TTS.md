@@ -386,6 +386,24 @@ When no `--qwen3-params` flag is given, the behaviour depends on the voice type:
 
 Passing any sampling parameter (e.g. `temperature:0.9`) switches all Qwen3 voices to sampling mode for that session.
 
+### Checking the generated segments
+
+Qwen3 occasionally fails on a segment: it skips the text (typically a short one, ending right away), or a cloned
+voice switches to a different speaker, sometimes even of the other gender
+(see [Taming Long-form Text-to-Speech](https://arxiv.org/abs/2609.16989)). Each segment is checked after generation:
+
+| Check            | Fails when                                                                                   | Voices                   |
+|------------------|----------------------------------------------------------------------------------------------|--------------------------|
+| Duration         | the audio lasts less than `--min-seconds-per-word` (default 0.15) times the words of the text | all the Qwen3 voices     |
+| Pitch            | the median pitch (F0) differs from the one of the reference by more than the ratio `--max-pitch-ratio` (default 1.6) | cloned voices |
+| Speaker identity | the cosine similarity between the speaker embeddings of the segment and of the reference is below `--min-speaker-similarity` (default 0.4); segments shorter than `--min-similarity-seconds` (default 3) aren't checked | cloned voices, MLX backend only |
+
+A failed segment is generated again, up to `--retries` times (default 2), with a warning; if all the attempts fail,
+the best one is kept. `--retries 0` disables the checks. Without sampling the same text always gives the same audio,
+so there are no retries. The measurements of each segment are in the debug log, useful to tune the thresholds.
+
+The speaker embedding is computed by the speaker encoder of the Qwen3 Base model, the one cloning the voices.
+
 ---
 
 ## Output Formats
@@ -419,6 +437,11 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | `--sounds-config <file>`         | Sounds used in the text, mapped to sound files mnemonics. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--sound-files-config <file>`    | Sound files, by mnemonic. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--timestamps <file>`         | Write the position of each line in the generated audio to *file*, in the Audacity label format (start and end in seconds, then the line's text, separated by tabs), and show each line's start time in the log. See [Labels](#labels). |
+| `--retries <n>`               | Times a Qwen3 segment that fails the checks is generated again; `0` disables the checks (default: `2`). See [Checking the generated segments](#checking-the-generated-segments). |
+| `--min-seconds-per-word <s>`  | Minimum duration per word of a Qwen3 segment (default: `0.15`).         |
+| `--max-pitch-ratio <r>`       | Maximum pitch ratio between a cloned voice segment and its reference (default: `1.6`). |
+| `--min-speaker-similarity <s>`| Minimum speaker similarity between a cloned voice segment and its reference (default: `0.4`). |
+| `--min-similarity-seconds <s>`| Segments shorter than this aren't checked for speaker similarity (default: `3`). |
 | `--list-unused`               | List the available voices that no speaker uses in the voices config, grouped by engine, plus the assigned voices that don't exist. No file to process is needed. |
 | `--debug`                     | Enable verbose logging.                                                 |
 
