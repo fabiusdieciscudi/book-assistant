@@ -166,6 +166,11 @@ class _Qwen3TTSBase(AbstractTTS):
     def _extra_close(self):
         pass
 
+    def samples(self) -> bool:
+        """True if generation is random, so that generating the same text again gives a different result:
+        with the PyTorch backend, only if a sampling parameter is set."""
+        return self.params().do_sample()
+
     @abstractmethod
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray: ...
 

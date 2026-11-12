@@ -70,6 +70,28 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         import mlx.core as mx
         mx.metal.clear_cache()
 
+    def samples(self) -> bool:
+        """mlx-audio samples by default (temperature 0.9 from the generation_config.json of the model)."""
+        return self.params().temperature != 0
+
+    def reference_audio(self) -> tuple[np.ndarray, int] | None:
+        if self._ref_audio is None:
+            return None
+        from mlx_audio.utils import load_audio
+        return np.asarray(load_audio(self._ref_audio, sample_rate=24000), dtype=np.float32), 24000
+
+    def speaker_embedding(self, audio: np.ndarray, sample_rate: int) -> np.ndarray | None:
+        """Uses the speaker encoder of the Base model (the one cloning voices), which works at 24 kHz."""
+        self.ensure_initialized()
+        if getattr(self._model, "speaker_encoder", None) is None:
+            return None
+        import mlx.core as mx
+        if sample_rate != 24000:
+            import librosa
+            audio = librosa.resample(y=audio, orig_sr=sample_rate, target_sr=24000, res_type="soxr_hq")
+        embedding = self._model.extract_speaker_embedding(mx.array(audio.astype(np.float32)), sr=24000)
+        return np.asarray(embedding, dtype=np.float32).reshape(-1)
+
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self.ensure_initialized()
         text += f" {self.end_mark}" if self.end_mark else ""

@@ -28,6 +28,7 @@ from .Sounds import SoundLibrary, Sfx, Ambient, parse_sound_tag, mix_ambience, f
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
 from .LRUModelCache import LRUModelCache
+from .SegmentCheck import SegmentChecker, CheckParams
 
 _TTS_COMMAND = "tts"
 _SPEAKER_PATTERN = re.compile(r'^\s*\[\s*([^,\]]+?)\s*(?:,\s*([^,\]]+?)\s*)?\]\s*:\s*')
@@ -142,6 +143,9 @@ class _Tail:
 
     def __init__(self, samples: np.ndarray):
         self.samples = samples
+
+
+_EXCERPT_LENGTH = 60      # longer texts are cut in the warnings about segments
 
 
 def _same_channels(waveforms: list[Any]) -> list[Any]:
@@ -353,6 +357,17 @@ class TTSCommand(CommandBase):
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
         parser.add_argument("--timestamps",                   default=None,                  help="Write the position of each line in the audio to this file (Audacity label format)")
+        parser.add_argument("--retries",            type=int,   default=CheckParams.retries,
+                            help="Qwen3: times a segment with skipped text or a different speaker is generated again; 0 disables the checks"
+                                 f" (default: {CheckParams.retries})")
+        parser.add_argument("--min-seconds-per-word", type=float, default=CheckParams.min_seconds_per_word,
+                            help=f"Qwen3: shorter segments have skipped text (default: {CheckParams.min_seconds_per_word})")
+        parser.add_argument("--max-pitch-ratio",    type=float, default=CheckParams.max_pitch_ratio,
+                            help=f"Qwen3 clones: max ratio between the pitch of a segment and of the reference (default: {CheckParams.max_pitch_ratio})")
+        parser.add_argument("--min-speaker-similarity", type=float, default=CheckParams.min_speaker_similarity,
+                            help=f"Qwen3 clones: min speaker similarity between a segment and the reference (default: {CheckParams.min_speaker_similarity})")
+        parser.add_argument("--min-similarity-seconds", type=float, default=CheckParams.min_similarity_seconds,
+                            help=f"Qwen3 clones: shorter segments aren't checked for speaker similarity (default: {CheckParams.min_similarity_seconds})")
         parser.add_argument("--list-unused",  action="store_true", default=False,            help="List the available voices not assigned in the voices config, without rendering")
 
     def run(self, args) -> None:
@@ -382,6 +397,11 @@ class TTSCommand(CommandBase):
                     max_lines=args.max_lines,
                     max_loaded_models=args.max_loaded_models,
                     timestamps=args.timestamps,
+                    check_params=CheckParams(retries=args.retries,
+                                             min_seconds_per_word=args.min_seconds_per_word,
+                                             max_pitch_ratio=args.max_pitch_ratio,
+                                             min_speaker_similarity=args.min_speaker_similarity,
+                                             min_similarity_seconds=args.min_similarity_seconds),
                     dry_run=args.dry_run)
 
     def _list_unused(self) -> None:
@@ -429,7 +449,11 @@ class TTSCommand(CommandBase):
                max_lines=99999,
                max_loaded_models=5,
                timestamps=None,
+               check_params: CheckParams = CheckParams(),
                dry_run=False) -> None:
+        if check_params.retries < 0:
+            raise ValueError(f"--retries can't be negative: {check_params.retries}")
+        self._checker = SegmentChecker(check_params)
         self._labels_file_name    = timestamps
         self._marks: list[tuple[int, str, str]] = []      # (position in samples, "scene" or "beat", numbered title)
         self._scene_number        = 0
@@ -685,10 +709,10 @@ class TTSCommand(CommandBase):
         def render() -> np.ndarray:
             if sampling_params:
                 with tts.overridden_params(sampling_params):
-                    return tts.generate_single_chunk(text, instruct_text)
-            return tts.generate_single_chunk(text, instruct_text)
+                    return self._checked(tts, text, lambda: tts.generate_single_chunk(text, instruct_text))
+            return self._checked(tts, text, lambda: tts.generate_single_chunk(text, instruct_text))
 
-        chunk, seconds = measure_time(lambda: single_channel(render()))
+        chunk, seconds = measure_time(render)
         debug(f">>>> rendered in {seconds:.1f} sec ({count_words(text) / seconds:.1f} words/sec)")
 
         if chunk.size > 0:
@@ -717,6 +741,41 @@ class TTSCommand(CommandBase):
                     chunk = np.clip(chunk, -1.0, 1.0)
 
         return chunk
+
+    def _checked(self, tts: AbstractTTS, text: str, generate) -> np.ndarray:
+        """Generates a segment with *generate* and, for Qwen3, checks it (skipped text, different speaker):
+        a failed segment is generated again, up to the retries set; if all the attempts fail, the best is kept.
+
+        :param tts:                     the TTS
+        :param text:                    the text of the segment
+        :param generate:                generates the segment
+        :return:                        the waveform (mono, at the sample rate of the TTS)
+        """
+        retries = self._checker.params.retries
+        if retries == 0 or not isinstance(tts, _Qwen3TTSBase):
+            return single_channel(generate())
+        if not tts.samples():
+            retries = 0                                     # without sampling, the same text gives the same audio
+        words = count_words(text)
+        excerpt = text if len(text) <= _EXCERPT_LENGTH else text[:_EXCERPT_LENGTH - 1] + "…"
+        quoted = f"'{excerpt}'".ljust(_EXCERPT_LENGTH + 2)                  # padded, so that the problems line up
+        debug(f"Segment check of '{excerpt}': {words} words, retries {retries}"
+              + ("" if tts.samples() else " (no sampling)") + f", {self._checker.params}")
+        best = None
+        for attempt in range(retries + 1):
+            chunk = single_channel(generate())
+            verdict = self._checker.check(tts, chunk, tts.sample_rate(), words)
+            debug(f"Segment check, attempt {attempt + 1}/{retries + 1}: {verdict.summary}: "
+                  + ("ok" if verdict.ok else verdict.problem))
+            if verdict.ok:
+                return chunk
+            if best is None or verdict.score > best[0].score:
+                best = (verdict, chunk)
+            if attempt < retries:
+                warning(f"{quoted}: {verdict.problem}: generating it again ({attempt + 1}/{retries})")
+        warning(f"{quoted}: {best[0].problem}"
+                + (f", even after {retries} retries: keeping the best attempt" if retries else " (no retries without sampling)"))
+        return best[1]
 
     def _patched(self, sentence: str) -> str:
         """Patch *sentence* using the word-patches map.

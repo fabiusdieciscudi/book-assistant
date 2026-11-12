@@ -148,5 +148,13 @@ class AbstractTTS(ABC):
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         pass
 
+    def reference_audio(self) -> tuple[np.ndarray, int] | None:
+        """The reference audio of a cloned voice (mono waveform, sample rate), or None."""
+        return None
+
+    def speaker_embedding(self, audio: np.ndarray, sample_rate: int) -> np.ndarray | None:
+        """The speaker embedding of *audio*, or None if this TTS can't compute it."""
+        return None
+
     def close(self):
         pass
