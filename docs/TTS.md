@@ -437,6 +437,7 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | `--sounds-config <file>`         | Sounds used in the text, mapped to sound files mnemonics. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--sound-files-config <file>`    | Sound files, by mnemonic. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--timestamps <file>`         | Write the position of each line in the generated audio to *file*, in the Audacity label format (start and end in seconds, then the line's text, separated by tabs), and show each line's start time in the log. See [Labels](#labels). |
+| `--paragraph-pause <s>`       | Silence in seconds between a paragraph (a line) and the next one (default: `0.1`). |
 | `--retries <n>`               | Times a Qwen3 segment that fails the checks is generated again; `0` disables the checks (default: `2`). See [Checking the generated segments](#checking-the-generated-segments). |
 | `--min-seconds-per-word <s>`  | Minimum duration per word of a Qwen3 segment (default: `0.15`).         |
 | `--max-pitch-ratio <r>`       | Maximum pitch ratio between a cloned voice segment and its reference (default: `1.6`). |
@@ -450,7 +451,7 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 ## Notes
 
 - All audio is resampled to a common sample rate (22050 Hz) before being concatenated.
-- A short silence is inserted between every line; longer pauses are inserted for blank lines and `***` lines.
+- A short silence is inserted between every line (`--paragraph-pause`, default 0.1 seconds); longer pauses are inserted for blank lines and `***` lines.
 - The input file is always validated before rendering begins, so speaker/voice errors are caught upfront.
 - Character translations are applied automatically: curly quotes become straight quotes, `…` becomes `...`.
 - Models are downloaded from HuggingFace on first use and cached locally; subsequent runs work fully offline.

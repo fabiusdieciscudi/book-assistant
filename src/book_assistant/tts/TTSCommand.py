@@ -357,6 +357,8 @@ class TTSCommand(CommandBase):
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
         parser.add_argument("--timestamps",                   default=None,                  help="Write the position of each line in the audio to this file (Audacity label format)")
+        parser.add_argument("--paragraph-pause",    type=float, default=0.1,
+                            help="Silence in seconds between a paragraph (a line) and the next one (default: 0.1)")
         parser.add_argument("--retries",            type=int,   default=CheckParams.retries,
                             help="Qwen3: times a segment with skipped text or a different speaker is generated again; 0 disables the checks"
                                  f" (default: {CheckParams.retries})")
@@ -397,6 +399,7 @@ class TTSCommand(CommandBase):
                     max_lines=args.max_lines,
                     max_loaded_models=args.max_loaded_models,
                     timestamps=args.timestamps,
+                    paragraph_pause=args.paragraph_pause,
                     check_params=CheckParams(retries=args.retries,
                                              min_seconds_per_word=args.min_seconds_per_word,
                                              max_pitch_ratio=args.max_pitch_ratio,
@@ -449,6 +452,7 @@ class TTSCommand(CommandBase):
                max_lines=99999,
                max_loaded_models=5,
                timestamps=None,
+               paragraph_pause=0.1,
                check_params: CheckParams = CheckParams(),
                dry_run=False) -> None:
         if check_params.retries < 0:
@@ -479,7 +483,9 @@ class TTSCommand(CommandBase):
         self._output_file_name    = output
         self._max_lines           = max_lines
         self._sample_rate         = 22050
-        self._new_line_silence_duration = 0.1
+        if paragraph_pause < 0:
+            raise ValueError(f"--paragraph-pause can't be negative: {paragraph_pause}")
+        self._new_line_silence_duration = paragraph_pause
         self._pause_silence_duration    = 1
         self._pause_lines         = _DEFAULT_PAUSE_LINES
         self._format              = format
