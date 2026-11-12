@@ -9,12 +9,21 @@ Commons.py — Shared utilities for BookAssistant.
 
 import sys
 import time
+from datetime import datetime
 import re
 import numpy as np
 from typing import Any, Tuple, Callable, Iterable
 
 # When True, debug() calls emit output; set via set_debug().
 debugging = False
+
+# When True, debug() calls emit output only to the log file; set via set_debug_to_file().
+debugging_to_file = False
+
+# When set, log() also writes to this file; set via set_log_file().
+log_file = None
+
+_ANSI_PATTERN = re.compile(r'\033\[[0-9;]*[A-Za-z]')
 
 # ANSI colour codes
 RED     = "\033[31m"
@@ -100,7 +109,29 @@ def log(message: str, new_line: bool = True) -> None:
     :param new_line:    if True (default) append \\n; if False overwrite the
                         current terminal line (used for progress display)
     """
+    _log(message, "INFO", message, new_line)
+
+def _log(message: str, level: str, file_message: str, new_line: bool = True) -> None:
+    """Write *message* to stderr and *file_message* to the log file, if any, with *level*."""
     print(message + ("" if new_line else "\033[K"), file=sys.stderr, end="\n" if new_line else "\r")
+    if new_line:                                    # progress lines, which overwrite themselves, are not repeated
+        _log_to_file(level, file_message)
+
+def _log_to_file(level: str, message: str) -> None:
+    """Write *message* to the log file, if any: local timestamp to the millisecond, level, text without colours."""
+    if log_file is not None:
+        timestamp = datetime.now().astimezone().isoformat(sep=" ", timespec="milliseconds")
+        print(f"{timestamp} {f'[{level}]':<9} {_ANSI_PATTERN.sub('', message)}", file=log_file, flush=True)
+
+def set_log_file(path: str | None) -> None:
+    """Repeat the log, without colours, in the file at *path*, which is overwritten (None to stop).
+
+    :param path:    the file
+    """
+    global log_file
+    if log_file is not None:
+        log_file.close()
+    log_file = None if path is None else open(path, "w", encoding="utf-8")
 
 def error(message: str) -> None:
     """Log *message* in red to stderr.
@@ -110,7 +141,7 @@ def error(message: str) -> None:
 
     :param message:     error description
     """
-    log(red(f"ERROR: {message}"))
+    _log(red(f"ERROR: {message}"), "ERROR", message)
 
 def warning(message: str) -> None:
     """Log *message* in yellow to stderr.
@@ -119,7 +150,7 @@ def warning(message: str) -> None:
 
     :param message:     warning description
     """
-    log(yellow(f"WARNING: {message}"))
+    _log(yellow(f"WARNING: {message}"), "WARNING", message)
 
 def debug(message: str) -> None:
     """Log *message* in magenta to stderr, but only when debugging is enabled.
@@ -131,7 +162,9 @@ def debug(message: str) -> None:
     :param message:     diagnostic text
     """
     if debugging:
-        log(magenta(message))
+        _log(magenta(message), "DEBUG", message)
+    elif debugging_to_file:
+        _log_to_file("DEBUG", message)
 
 def set_debug(_debug: bool) -> None:
     """Enable or disable verbose debug logging globally.
@@ -143,6 +176,14 @@ def set_debug(_debug: bool) -> None:
     """
     global debugging
     debugging = _debug
+
+def set_debug_to_file(_debug: bool) -> None:
+    """Enable or disable debug logging only to the log file (see set_log_file()).
+
+    :param _debug:  True to write debug output to the log file, False to suppress it
+    """
+    global debugging_to_file
+    debugging_to_file = _debug
 
 def is_debug() -> bool:
     return debugging
