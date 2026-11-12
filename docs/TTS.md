@@ -408,12 +408,17 @@ The speaker embedding is computed by the speaker encoder of the Qwen3 Base model
 
 ## Output Formats
 
-| Format        | Option         |
-|---------------|----------------|
-| WAV (default) | `--format WAV` |
-| MP3           | `--format MP3` |
+All the formats that libsndfile can write are supported, with their default encoding (e.g. 16-bit PCM for WAV and FLAC,
+Vorbis for OGG); `BookAssistant tts --help` lists them. The most useful ones:
 
-For MP3, use `--compression` to set the quality level (0–99, default 0 = highest quality).
+| Format        | Option          |
+|---------------|-----------------|
+| WAV (default) | `--format WAV`  |
+| FLAC          | `--format FLAC` |
+| MP3           | `--format MP3`  |
+| OGG Vorbis    | `--format OGG`  |
+
+For MP3 and OGG, use `--compression` to set the quality level (0–99, default 0 = highest quality).
 If you need more advanced encoding options, output a WAV and convert with `ffmpeg`.
 
 ---
@@ -423,7 +428,7 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | Option                        | Description                                                             |
 |-------------------------------|-------------------------------------------------------------------------|
 | `--output <file>`             | Output file path. Defaults to stdout.                                   |
-| `--format <fmt>`              | Output format: `WAV` or `MP3` (default: `WAV`).                         |
+| `--format <fmt>`              | Output format: any format libsndfile can write, e.g. `WAV`, `FLAC`, `MP3`, `OGG` (default: `WAV`). |
 | `--compression <n>`           | Compression level 0–99 for MP3 (default: `0`).                          |
 | `--voices-config <file>`      | Speaker-to-voice mapping. Repeatable.                                   |
 | `--instruct-config <file>`    | Voice instruction mapping. Repeatable.                                  |
@@ -559,7 +564,8 @@ A line containing only `[scene:<name>]` marks the start of a scene, and `[beat:<
 - They are numbered progressively, so that a flat chapter list still shows the structure: `1. Il treno`, `1.1. La partenza`, `1.2. Il controllore`, `2. L'arrivo`. The beat numbering restarts at each scene, and the scene numbering at each input file.
 - A scene lasts until the next scene, so it spans its beats; a beat lasts until the next beat or scene. When a beat starts together with its scene, both chapters start at the same time, the scene first.
 - The audio before the first scene tag is not part of any chapter. A beat before the first scene stops the run during validation.
-- With WAV output scenes and beats are only logged, with a warning that chapters require MP3.
+- With FLAC output they become Vorbis comments following the "Chapter Extension" convention (`CHAPTER001=00:01:23.456`, `CHAPTER001NAME=1. Il treno`). Few players show them, but ffmpeg reads them, so they are preserved when the FLAC is converted, e.g. to MP3 with ID3 chapters: `ffmpeg -i chapter.flac -c:a libmp3lame -q:a 2 -id3v2_version 3 chapter.mp3`.
+- With the other formats scenes and beats are only logged, with a warning that chapters require FLAC or MP3.
 - The tags must be alone on their line, and the name can't be empty: otherwise the run stops during validation.
 - The name can contain any character except `]`.
 - On macOS, the chapters are shown by IINA (in the playlist sidebar, *Chapters* tab) and by the Finder's Quick Look; Apple Music and QuickTime Player ignore them.
