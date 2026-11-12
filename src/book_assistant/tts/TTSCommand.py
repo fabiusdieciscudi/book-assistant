@@ -24,6 +24,7 @@ from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
 from .AudioEffects import parse_effects, apply_effects
 from .Id3Chapters import chapters_tag
+from .FlacChapters import with_chapters
 from .Sounds import SoundLibrary, Sfx, Ambient, parse_sound_tag, mix_ambience, faded, trimmed, delayed, check_sound, is_stereo, as_stereo, DEFAULT_FADE
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
@@ -43,6 +44,10 @@ _AMBIENT_ANY_PATTERN  = re.compile(r'\[\s*ambient\b', re.IGNORECASE)
 _PAUSE_ARG_PATTERN = re.compile(r'^\s*:\s*(\d+(?:\.\d+)?)\s*s?\s*$')
 _CHAR_TRANSLATIONS = str.maketrans({"’": "'", "…": "...", '“': '"', '”': '"'})
 _DEFAULT_PAUSE_LINES: set[str] = {"", "***"}
+
+# Formats where --compression sets the quality (libsndfile also supports it for FLAC, where it trades size for
+# speed: the default of libsndfile is used there).
+_LOSSY_FORMATS = {"MP3", "OGG"}
 
 
 def _dump_config(name: str, config: dict) -> None:
@@ -353,7 +358,8 @@ class TTSCommand(CommandBase):
         parser.add_argument("--qwen3-end-mark",               default="",                    help="Dummy symbol appended to every chunk for Qwen3, e.g. ^ (default: none)")
         parser.add_argument("--max-lines",          type=int, default=99999,                 help="Max. number of lines to process")
         parser.add_argument("--max-loaded-models",  type=int, default=5,                     help="Max. number of models to keep in memory")
-        parser.add_argument("--format",                       default="WAV",                 help="Output file format (default: WAV)")
+        parser.add_argument("--format",                       default="WAV",
+                            help=f"Output file format: {', '.join(sorted(sf.available_formats()))} (default: WAV)")
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
         parser.add_argument("--timestamps",                   default=None,                  help="Write the position of each line in the audio to this file (Audacity label format)")
@@ -488,7 +494,9 @@ class TTSCommand(CommandBase):
         self._new_line_silence_duration = paragraph_pause
         self._pause_silence_duration    = 1
         self._pause_lines         = _DEFAULT_PAUSE_LINES
-        self._format              = format
+        self._format              = format.upper()
+        if self._format not in sf.available_formats():
+            raise ValueError(f"Unsupported format: {format} - valid values: {','.join(sorted(sf.available_formats()))}")
         self._compression_level   = compression_level
         self._dry_run             = dry_run
 
@@ -607,23 +615,26 @@ class TTSCommand(CommandBase):
         log(f"Total generated samples: {len(full_waveform)}, {len(full_waveform) / self._sample_rate:.1f} seconds, "
             f"{'stereo' if is_stereo(full_waveform) else 'mono'}")
         buffer = io.BytesIO()
-        match self._format.upper():
-            case "WAV":
-                sf.write(buffer, full_waveform, samplerate=self._sample_rate, format="WAV", subtype="PCM_16")
-            case "MP3":
-                sf.write(buffer, full_waveform, samplerate=self._sample_rate, format="MP3", subtype="MPEG_LAYER_III",
-                         bitrate_mode="VARIABLE", compression_level=self._compression_level)
-            case _:
-                raise ValueError(f"Unsupported format: {self._format}")
-        buffer.seek(0)
+        options = {}
+        if self._format in _LOSSY_FORMATS:
+            options["compression_level"] = self._compression_level
+        if self._format == "MP3":
+            options["bitrate_mode"] = "VARIABLE"
+        sf.write(buffer, full_waveform, samplerate=self._sample_rate, format=self._format,
+                 subtype=sf.default_subtype(self._format) or "PCM_16", **options)
+        data = buffer.getvalue()
         chapters = self._chapters(len(full_waveform))
         if chapters:
-            if self._format.upper() == "MP3":
-                output.write(chapters_tag(chapters, self._toc_title))
-                log(f"Chapters: {len(chapters)} scenes and beats written to the MP3 tag")
-            else:
-                warning(f"{len(chapters)} scenes and beats found, but chapters are only written in MP3 output")
-        output.write(buffer.read())
+            match self._format:
+                case "MP3":
+                    output.write(chapters_tag(chapters, self._toc_title))
+                    log(f"Chapters: {len(chapters)} scenes and beats written to the MP3 tag")
+                case "FLAC":
+                    data = with_chapters(data, chapters)
+                    log(f"Chapters: {len(chapters)} scenes and beats written to the FLAC Vorbis comments")
+                case _:
+                    warning(f"{len(chapters)} scenes and beats found, but chapters are only written in FLAC and MP3 output")
+        output.write(data)
         output.flush()
 
     def _process_text(self, tts: AbstractTTS, sentence: str, instruct: str, waveforms: list[Any],
