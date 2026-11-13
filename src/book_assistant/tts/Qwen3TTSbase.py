@@ -4,10 +4,11 @@
 # SPDX-License-Identifier: MIT
 
 import gc
+import weakref
 from abc import abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from typing import Optional
+from typing import Any, Callable, Optional
 import numpy as np
 
 from .AbstractTTS import AbstractTTS
@@ -124,6 +125,23 @@ AUDIOBOOK_PARAMS = Qwen3Params(
 )
 
 
+class _SharedModel:
+    """A loaded model, with its tokenizer if any, shared by all the voices that use it.
+
+    The voices differ only in what they pass at each generation (reference, speaker, instruct, sampling
+    parameters): the models don't keep any state about a voice between generations, apart from caches keyed
+    by the reference itself (checked for mlx-audio 0.6.5 and qwen-tts 0.1.1).
+    """
+    def __init__(self, model: Any, tokenizer: Any = None):
+        self.model = model
+        self.tokenizer = tokenizer
+
+
+# The loaded models, by backend and model: an entry disappears, and the model is unloaded, when no voice
+# holds it any more.
+_shared_models: "weakref.WeakValueDictionary[tuple, _SharedModel]" = weakref.WeakValueDictionary()
+
+
 class _Qwen3TTSBase(AbstractTTS):
     """Shared interface for both backends. Not instantiated directly."""
 
@@ -154,13 +172,36 @@ class _Qwen3TTSBase(AbstractTTS):
         finally:
             self._params = saved
 
-    def close(self):
-        debug(f"Unloading Qwen3 ({self._model_size}) from '{self._model_name}'")
+    def _use_shared_model(self, key: tuple, description: str, load: Callable[[], _SharedModel]) -> _SharedModel:
+        """Uses the model with *key* if a voice already loaded it, otherwise loads it with *load*.
 
+        :param key:                     identifies the model (backend, model name and anything else affecting loading)
+        :param description:             the model, for the log
+        :param load:                    loads the model
+        :return:                        the shared model
+        """
+        shared = _shared_models.get(key)
+        if shared is None:
+            debug(f"Loading {description}")
+            shared = load()
+            _shared_models[key] = shared
+        else:
+            debug(f"Using the already loaded {description}")
+        self._shared = shared
+        self._model = shared.model
+        return shared
+
+    def close(self):
         if hasattr(self, '_initialized') and self._initialized:
+            key = next((k for k, v in _shared_models.items() if v is getattr(self, "_shared", None)), None)
             del self._model
-            self._extra_close()
+            self._shared = None
             gc.collect()
+            if key in _shared_models:
+                debug(f"Releasing Qwen3 ({self._model_size}) '{self._model_name}': still used by other voices")
+            else:
+                debug(f"Unloading Qwen3 ({self._model_size}) from '{self._model_name}'")
+                self._extra_close()
             self._initialized = False
 
     def _extra_close(self):
