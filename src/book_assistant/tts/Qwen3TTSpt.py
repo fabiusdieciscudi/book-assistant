@@ -6,7 +6,7 @@
 import pickle
 import numpy as np
 from book_assistant.Commons import debug
-from .Qwen3TTSbase import _Qwen3TTSBase, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, \
+from .Qwen3TTSbase import _Qwen3TTSBase, _SharedModel, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, \
     _BASE_MODEL_PT, _CUSTOM_VOICE_MODEL_PT, _VOICE_DESIGN_MODEL_PT, _VOICE_NAMES
 
 class Qwen3TTSpt(_Qwen3TTSBase):
@@ -34,14 +34,18 @@ class Qwen3TTSpt(_Qwen3TTSBase):
         from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
 
         _TYPE_PT = {'Lite': torch.float32, 'Pro': torch.float16}
-        debug(f"Loading Qwen3-PT ({self._model_size}) from '{self._model_name}'")
-        local_path = self._ensure_hf_model(repo_id=self._model_name)
-        self._model = Qwen3TTSModel.from_pretrained(
-            local_path,
-            device_map=self._device,
-            dtype=_TYPE_PT[self._model_size],
-            attn_implementation="sdpa",
-            local_files_only=True)
+
+        def load() -> _SharedModel:
+            local_path = self._ensure_hf_model(repo_id=self._model_name)
+            return _SharedModel(Qwen3TTSModel.from_pretrained(
+                local_path,
+                device_map=self._device,
+                dtype=_TYPE_PT[self._model_size],
+                attn_implementation="sdpa",
+                local_files_only=True))
+
+        self._use_shared_model(("pt", self._model_name, str(self._device), self._model_size),
+                               f"Qwen3-PT ({self._model_size}) from '{self._model_name}'", load)
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self.ensure_initialized()

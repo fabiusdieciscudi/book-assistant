@@ -9,7 +9,7 @@ import numpy as np
 import soundfile as sf
 from pathlib import Path
 from book_assistant.Commons import debug, is_debug, log, warning
-from .Qwen3TTSbase import _Qwen3TTSBase, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, _VOICE_NAMES, \
+from .Qwen3TTSbase import _Qwen3TTSBase, _SharedModel, Qwen3Params, CLONE_PROMPT, DESIGN_PROMPT, _VOICE_NAMES, \
     _BASE_MODEL_MLX, _CUSTOM_VOICE_MODEL_MLX, _VOICE_DESIGN_MODEL_MLX
 
 _FRAMES_PER_SECOND = 12.5      # Qwen3-TTS codec: one token per 80 ms of audio
@@ -48,23 +48,27 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
         import mlx.core as mx
         from transformers import logging as hf_logging, AutoTokenizer
 
-        debug(f"Loading Qwen3-MLX ({self._model_size}) from '{self._model_name}'")
-        local_path = self._ensure_hf_model(
-            repo_id=self._model_name,
-            allow_patterns=["*.safetensors", "config.json", "*.json", "*.txt", "*.model"])
-        # mlx_audio calls transformers internally and triggers two spurious warnings:
-        #   1. "model of type qwen3_tts to instantiate a model of type" — the custom
-        #      Qwen3TTSModel type isn't registered in the transformers hub, but loads fine.
-        #   2. "incorrect regex pattern … fix_mistral_regex=True" — the tokenizer carries
-        #      a Mistral-inherited lookahead regex; harmless for TTS inference.
-        # Both are WARNING-level noise; suppress them for the duration of the load.
-        prev_verbosity = hf_logging.get_verbosity()
-        hf_logging.set_verbosity_error()
-        try:
-            self._model = load_model(Path(local_path))
-            self._tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
-        finally:
-            hf_logging.set_verbosity(prev_verbosity)
+        def load() -> _SharedModel:
+            local_path = self._ensure_hf_model(
+                repo_id=self._model_name,
+                allow_patterns=["*.safetensors", "config.json", "*.json", "*.txt", "*.model"])
+            # mlx_audio calls transformers internally and triggers two spurious warnings:
+            #   1. "model of type qwen3_tts to instantiate a model of type" — the custom
+            #      Qwen3TTSModel type isn't registered in the transformers hub, but loads fine.
+            #   2. "incorrect regex pattern … fix_mistral_regex=True" — the tokenizer carries
+            #      a Mistral-inherited lookahead regex; harmless for TTS inference.
+            # Both are WARNING-level noise; suppress them for the duration of the load.
+            prev_verbosity = hf_logging.get_verbosity()
+            hf_logging.set_verbosity_error()
+            try:
+                return _SharedModel(load_model(Path(local_path)),
+                                    AutoTokenizer.from_pretrained(local_path, local_files_only=True))
+            finally:
+                hf_logging.set_verbosity(prev_verbosity)
+
+        shared = self._use_shared_model(("mlx", self._model_name),
+                                        f"Qwen3-MLX ({self._model_size}) from '{self._model_name}'", load)
+        self._tokenizer = shared.tokenizer
 
     def _extra_close(self):
         import mlx.core as mx
