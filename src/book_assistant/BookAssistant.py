@@ -5,10 +5,11 @@
 
 import argparse
 import importlib
+import sys
 from pathlib import Path
 import book_assistant
 from book_assistant import CommandBase
-from book_assistant.Commons import set_debug, set_debug_to_file, set_log_file, error
+from book_assistant.Commons import set_debug, set_debug_to_file, set_log_file, error, exception
 from book_assistant.Version import __version__
 
 
@@ -47,4 +48,8 @@ if __name__ == '__main__':
     set_debug(args.debug)
     set_debug_to_file(args.debug_to_file)
     set_log_file(args.log_file)
-    command_map[args.command].run(args)
+    try:
+        command_map[args.command].run(args)
+    except Exception as e:
+        exception(e)
+        sys.exit(1)
