@@ -9,6 +9,7 @@ Commons.py — Shared utilities for BookAssistant.
 
 import sys
 import time
+import traceback
 from datetime import datetime
 import re
 import numpy as np
@@ -22,6 +23,7 @@ debugging_to_file = False
 
 # When set, log() also writes to this file; set via set_log_file().
 log_file = None
+log_file_path = None
 
 _ANSI_PATTERN = re.compile(r'\033\[[0-9;]*[A-Za-z]')
 
@@ -128,10 +130,11 @@ def set_log_file(path: str | None) -> None:
 
     :param path:    the file
     """
-    global log_file
+    global log_file, log_file_path
     if log_file is not None:
         log_file.close()
     log_file = None if path is None else open(path, "w", encoding="utf-8")
+    log_file_path = path
 
 def error(message: str) -> None:
     """Log *message* in red to stderr.
@@ -139,9 +142,29 @@ def error(message: str) -> None:
     Intended for non-fatal user-facing errors such as missing files or
     unsupported language tags.
 
+    On the terminal, unless debugging, it's followed by a hint about where to find more details.
+
     :param message:     error description
     """
     _log(red(f"ERROR: {message}"), "ERROR", message)
+    if not debugging:
+        hint = (f"more details in the log file: {log_file_path}" if debugging_to_file and log_file is not None
+                else "run with --debug for more details")
+        print(red(f"       ({hint})"), file=sys.stderr)
+
+def exception(e: BaseException) -> None:
+    """Log a caught exception: its message as an error, the stack trace only when debugging (on the terminal and
+    in the log file with --debug, only in the log file with --debug-to-file).
+
+    :param e:           the exception
+    """
+    if debugging or debugging_to_file:
+        trace = "".join(traceback.format_exception(e)).rstrip()
+        if debugging:
+            _log(magenta(trace), "DEBUG", trace)
+        else:
+            _log_to_file("DEBUG", trace)
+    error(str(e) or type(e).__name__)
 
 def warning(message: str) -> None:
     """Log *message* in yellow to stderr.
