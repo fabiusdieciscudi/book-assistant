@@ -90,7 +90,10 @@ class Qwen3TTSmlx(_Qwen3TTSBase):
             import librosa
             audio = librosa.resample(y=audio, orig_sr=sample_rate, target_sr=24000, res_type="soxr_hq")
         embedding = self._model.extract_speaker_embedding(mx.array(audio.astype(np.float32)), sr=24000)
-        return np.asarray(embedding, dtype=np.float32).reshape(-1)
+        result = np.asarray(embedding, dtype=np.float32).reshape(-1)
+        del embedding
+        mx.clear_cache()            # MLX keeps the freed buffers, of a different size for each segment: release them
+        return result
 
     def generate_single_chunk(self, text: str, instruct: str = "") -> np.ndarray:
         self.ensure_initialized()
