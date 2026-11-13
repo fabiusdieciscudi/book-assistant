@@ -191,6 +191,44 @@ def _mix_tails(waveforms: list[Any]) -> list[Any]:
     return result
 
 
+# Sentence ends: '.', '!' or '?' followed by a space; ellipses ('...') don't end a sentence.
+_SENTENCE_END = re.compile(r'(?<=[!?])\s+|(?<=[^.]\.)\s+')
+# Clause ends, used only for sentences longer than the limit.
+_CLAUSE_END = re.compile(r'(?<=[;:])\s+')
+
+
+def _chunks(line: str, max_words: int) -> tuple[list[str], list[str]]:
+    """Splits a line longer than *max_words* into chunks of consecutive sentences, each within *max_words*.
+
+    A sentence longer than the limit is split at ';' and ':' too; a part still longer than the limit becomes a chunk
+    on its own.
+
+    :param line:                    the line
+    :param max_words:               the maximum number of words of a chunk
+    :return:                        the chunks, and the parts longer than the limit
+    """
+    pieces, too_long = [], []
+    for sentence in _SENTENCE_END.split(line.strip()):
+        if count_words(sentence) <= max_words:
+            pieces.append(sentence)
+        else:
+            for clause in _CLAUSE_END.split(sentence):
+                pieces.append(clause)
+                if count_words(clause) > max_words:
+                    too_long.append(clause)
+    chunks, current, words = [], [], 0
+    for piece in pieces:
+        n = count_words(piece)
+        if current and words + n > max_words:
+            chunks.append(" ".join(current))
+            current, words = [], 0
+        current.append(piece)
+        words += n
+    if current:
+        chunks.append(" ".join(current))
+    return chunks, too_long
+
+
 def _split_pauses(text: str) -> list[str | float | None | Sfx]:
     """Splits *text* at the inline pause and sound effect tags.
 
@@ -1025,13 +1063,18 @@ class TTSCommand(CommandBase):
                             log(f"{file_name}[ {l: >3}   ]: {self._timestamp(line_start)}({words : >3} words): {cyan(line)}")
                             self._process_text(tts, line, tts_instruct, waveforms, voice_params)
                     else:
-                        sentences = re.split(r'(?<=[.;:!?])\s+|\s*\.{3}\s*', line)
-                        if not dry_run:
-                            for s, sentence in enumerate(sentences, 1):
-                                words = count_words(sentence)
+                        chunks, too_long = _chunks(line, tts.max_words())
+                        if dry_run:
+                            for part in too_long:
+                                warning(f"{file_name}, line {l}: a sentence of {count_words(part)} words exceeds the limit of "
+                                        f"{tts.max_words()} words of {tts.prefix()} and is rendered as a single segment: "
+                                        f"'{part[:60]}…'")
+                        else:
+                            for s, chunk in enumerate(chunks, 1):
+                                words = count_words(chunk)
                                 self._word_count += words
-                                log(f"{file_name}[ {l: >3}.{s:<2}]: {self._timestamp(_samples(waveforms))}({words : >3} words): {cyan(sentence)}")
-                                self._process_text(tts, sentence.strip(), tts_instruct, waveforms, voice_params)
+                                log(f"{file_name}[ {l: >3}.{s:<2}]: {self._timestamp(_samples(waveforms))}({words : >3} words): {cyan(chunk)}")
+                                self._process_text(tts, chunk, tts_instruct, waveforms, voice_params)
                     if not dry_run and self._labels_file_name and self._speech_end_samples > line_start:
                         self._labels.append((line_start / self._sample_rate, self._speech_end_samples / self._sample_rate, line))
 
