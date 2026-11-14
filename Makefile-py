@@ -31,7 +31,7 @@ pip-install: pip-install-tools
 	source $(VENV)/bin/activate && pip install -e .
 
 pip-compile: pip-check-version
-	source $(VENV)/bin/activate && pip-compile --generate-hashes requirements.in --output-file=requirements.txt
+	source $(VENV)/bin/activate && pip-compile -v --generate-hashes requirements.in --output-file=requirements.txt
 
 pip-audit: pip-check-version
 	source $(VENV)/bin/activate && pip-audit
