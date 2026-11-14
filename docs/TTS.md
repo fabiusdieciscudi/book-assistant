@@ -421,6 +421,17 @@ Vorbis for OGG); `BookAssistant tts --help` lists them. The most useful ones:
 For MP3 and OGG, use `--compression` to set the quality level (0–99, default 0 = highest quality).
 If you need more advanced encoding options, output a WAV and convert with `ffmpeg`.
 
+With FLAC output and `--subtitles`, the text of each line is also written, with its start time, in the `LYRICS` Vorbis
+comment, in the LRC format used by the players that show synced lyrics (`[01:05.12]Siamo in ritardo.`; long paragraphs
+aren't split). With `--subtitle-speakers`, the lines spoken by a speaker start with the name used in the text, e.g.
+`(Claire) Siamo in ritardo.` also for `[Claire, telefono]:`; the narrator's lines have no name. ffmpeg keeps the tag when
+converting the FLAC to MP3, and can turn it into subtitles, e.g. SRT:
+
+```
+ffprobe -v error -show_entries format_tags=LYRICS -of default=nw=1:nk=1 chapter.flac > chapter.lrc
+ffmpeg -i chapter.lrc chapter.srt
+```
+
 ---
 
 ## Options
@@ -442,6 +453,8 @@ If you need more advanced encoding options, output a WAV and convert with `ffmpe
 | `--sounds-config <file>`         | Sounds used in the text, mapped to sound files mnemonics. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--sound-files-config <file>`    | Sound files, by mnemonic. Can be repeated. See [Ambience and sound effects](#ambience-and-sound-effects). |
 | `--timestamps <file>`         | Write the position of each line in the generated audio to *file*, in the Audacity label format (start and end in seconds, then the line's text, separated by tabs), and show each line's start time in the log. See [Labels](#labels). |
+| `--subtitles`                 | Embed the lines, with their start times, as LRC subtitles in the `LYRICS` tag; requires `--format FLAC`. See [Output Formats](#output-formats). |
+| `--subtitle-speakers`         | Prepend the speaker's name, as `(name)`, to the subtitles of the lines not read by the narrator; requires `--subtitles`. |
 | `--paragraph-pause <s>`       | Silence in seconds between a paragraph (a line) and the next one (default: `0.1`). |
 | `--retries <n>`               | Times a Qwen3 segment that fails the checks is generated again; `0` disables the checks (default: `2`). See [Checking the generated segments](#checking-the-generated-segments). |
 | `--min-seconds-per-word <s>`  | Minimum duration per word of a Qwen3 segment (default: `0.15`).         |
