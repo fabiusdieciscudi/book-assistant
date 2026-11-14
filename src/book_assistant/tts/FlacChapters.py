@@ -7,6 +7,9 @@
 (CHAPTER001=HH:MM:SS.mmm, CHAPTER001NAME=title).
 
 ffmpeg reads them as chapters, so they are preserved when the file is converted, e.g. to MP3 with ID3 chapters.
+
+Also adds the text of the lines, with their start times, as subtitles in the LRC format ([mm:ss.xx]text) in the LYRICS
+Vorbis comment, the one used by the players that show synced lyrics.
 """
 import struct
 
@@ -22,6 +25,30 @@ def with_chapters(flac: bytes, chapters: list[tuple[float, float, str]]) -> byte
     :param chapters:                the chapters, as (start seconds, end seconds, title), in order
     :return:                        the FLAC stream with the chapters
     """
+    added = []
+    for i, (start, _, title) in enumerate(chapters, 1):
+        added.append(f"CHAPTER{i:03d}={_time(start)}".encode())
+        added.append(f"CHAPTER{i:03d}NAME={title}".encode())
+    return _with_comments(flac, b"CHAPTER", added)
+
+
+def with_lyrics(flac: bytes, lines: list[tuple[float, float, str]]) -> bytes:
+    """Returns *flac* with the lines, as LRC, in the LYRICS Vorbis comment (the block is created if missing).
+
+    Each line is shown from its start until the next one; an empty line at the end of the last one clears it.
+
+    :param flac:                    the FLAC stream
+    :param lines:                   the lines, as (start seconds, end seconds, text), in order
+    :return:                        the FLAC stream with the lines
+    """
+    lrc = [f"[{_lrc_time(start)}]{' '.join(text.split())}" for start, _, text in lines]
+    if lines:
+        lrc.append(f"[{_lrc_time(lines[-1][1])}]")
+    return _with_comments(flac, b"LYRICS=", [("LYRICS=" + "\n".join(lrc)).encode()])
+
+
+def _with_comments(flac: bytes, prefix: bytes, added: list[bytes]) -> bytes:
+    """Returns *flac* with the Vorbis comments starting with *prefix* (case insensitive) replaced by *added*."""
     if flac[:4] != b"fLaC":
         raise ValueError("Not a FLAC stream")
     blocks, audio = _blocks(flac)
@@ -29,10 +56,7 @@ def with_chapters(flac: bytes, chapters: list[tuple[float, float, str]]) -> byte
     for kind, body in blocks:
         if kind == _VORBIS_COMMENT:
             vendor, comments = _parse_comments(body)
-    comments = [c for c in comments if not c.upper().startswith(b"CHAPTER")]
-    for i, (start, _, title) in enumerate(chapters, 1):
-        comments.append(f"CHAPTER{i:03d}={_time(start)}".encode())
-        comments.append(f"CHAPTER{i:03d}NAME={title}".encode())
+    comments = [c for c in comments if not c.upper().startswith(prefix)] + added
     comment_block = (_VORBIS_COMMENT, _comments_body(vendor, comments))
     others = [b for b in blocks if b[0] != _VORBIS_COMMENT]
     blocks = others[:1] + [comment_block] + others[1:]        # STREAMINFO must stay the first block
@@ -74,6 +98,12 @@ def _parse_comments(body: bytes) -> tuple[bytes, list[bytes]]:
 def _comments_body(vendor: bytes, comments: list[bytes]) -> bytes:
     return (struct.pack("<I", len(vendor)) + vendor + struct.pack("<I", len(comments))
             + b"".join(struct.pack("<I", len(c)) + c for c in comments))
+
+
+def _lrc_time(seconds: float) -> str:
+    """Formats a time as LRC: minutes (also beyond 59), seconds and hundredths."""
+    hundredths = round(seconds * 100)
+    return f"{hundredths // 6000:02d}:{hundredths // 100 % 60:02d}.{hundredths % 100:02d}"
 
 
 def _time(seconds: float) -> str:

@@ -24,7 +24,7 @@ from .SibiliaTTS import SibiliaTTS
 from .Qwen3TTS import Qwen3TTS
 from .AudioEffects import parse_effects, apply_effects
 from .Id3Chapters import chapters_tag
-from .FlacChapters import with_chapters
+from .FlacChapters import with_chapters, with_lyrics
 from .Sounds import SoundLibrary, Sfx, Ambient, parse_sound_tag, mix_ambience, faded, trimmed, delayed, check_sound, is_stereo, as_stereo, DEFAULT_FADE
 from .Qwen3TTSbase import Qwen3Params, AUDIOBOOK_PARAMS, register_custom_voice_model, _Qwen3TTSBase, CLONE_PROMPT
 from .VoxtralTTS import VoxtralTTS
@@ -401,6 +401,8 @@ class TTSCommand(CommandBase):
         parser.add_argument("--compression",                  default=0,                     help="Output file compression level ([0...100) - default: 0)")
         parser.add_argument("--output",                       default=None,                  help="Output file (default: stdout)")
         parser.add_argument("--timestamps",                   default=None,                  help="Write the position of each line in the audio to this file (Audacity label format)")
+        parser.add_argument("--subtitles",          action="store_true", default=False,     help="Embed the lines as LRC subtitles in the LYRICS tag (FLAC output only)")
+        parser.add_argument("--subtitle-speakers",  action="store_true", default=False,     help="Prepend the speaker's name, as (name), to the subtitles (requires --subtitles)")
         parser.add_argument("--paragraph-pause",    type=float, default=0.1,
                             help="Silence in seconds between a paragraph (a line) and the next one (default: 0.1)")
         parser.add_argument("--retries",            type=int,   default=CheckParams.retries,
@@ -443,6 +445,8 @@ class TTSCommand(CommandBase):
                     max_lines=args.max_lines,
                     max_loaded_models=args.max_loaded_models,
                     timestamps=args.timestamps,
+                    subtitles=args.subtitles,
+                    subtitle_speakers=args.subtitle_speakers,
                     paragraph_pause=args.paragraph_pause,
                     check_params=CheckParams(retries=args.retries,
                                              min_seconds_per_word=args.min_seconds_per_word,
@@ -496,6 +500,8 @@ class TTSCommand(CommandBase):
                max_lines=99999,
                max_loaded_models=5,
                timestamps=None,
+               subtitles=False,
+               subtitle_speakers=False,
                paragraph_pause=0.1,
                check_params: CheckParams = CheckParams(),
                dry_run=False) -> None:
@@ -508,6 +514,7 @@ class TTSCommand(CommandBase):
         self._beat_number         = 0
         self._toc_title           = ""
         self._labels: list[tuple[float, float, str]] = []
+        self._label_speakers: list[str | None] = []        # the speaker of each label, None for the narrator
         self._speech_end_samples  = 0
         self._sounds              = SoundLibrary(sound_files_config, sounds_config)
         self._ambience: list[Ambient] = []
@@ -535,6 +542,12 @@ class TTSCommand(CommandBase):
         self._format              = format.upper()
         if self._format not in sf.available_formats():
             raise ValueError(f"Unsupported format: {format} - valid values: {','.join(sorted(sf.available_formats()))}")
+        if subtitles and self._format != "FLAC":
+            raise ValueError(f"--subtitles requires --format FLAC, not {self._format}")
+        if subtitle_speakers and not subtitles:
+            raise ValueError("--subtitle-speakers requires --subtitles")
+        self._subtitles           = subtitles
+        self._subtitle_speakers   = subtitle_speakers
         self._compression_level   = compression_level
         self._dry_run             = dry_run
 
@@ -672,6 +685,14 @@ class TTSCommand(CommandBase):
                     log(f"Chapters: {len(chapters)} scenes and beats written to the FLAC Vorbis comments")
                 case _:
                     warning(f"{len(chapters)} scenes and beats found, but chapters are only written in FLAC and MP3 output")
+        if self._subtitles and self._labels:
+            lines = self._labels
+            if self._subtitle_speakers:
+                # Round brackets, since in LRC a text starting with [ is taken as a further timestamp
+                lines = [(start, end, f"({name}) {text}" if name else text)
+                         for (start, end, text), name in zip(self._labels, self._label_speakers)]
+            data = with_lyrics(data, lines)
+            log(f"Subtitles: {len(self._labels)} lines written to the FLAC LYRICS tag, in the LRC format")
         output.write(data)
         output.flush()
 
@@ -1011,8 +1032,10 @@ class TTSCommand(CommandBase):
                     if not match:
                         speaker = "default"
                         instruct = "default"
+                        speaker_name = None
                     else:
                         speaker = match.group(1).strip()
+                        speaker_name = None if speaker == "default" else speaker
                         instruct = match.group(2).strip() if match.lastindex >= 2 else "default"
                         line = _SPEAKER_PATTERN.sub('', line).strip()
 
@@ -1075,8 +1098,9 @@ class TTSCommand(CommandBase):
                                 self._word_count += words
                                 log(f"{file_name}[ {l: >3}.{s:<2}]: {self._timestamp(_samples(waveforms))}({words : >3} words): {cyan(chunk)}")
                                 self._process_text(tts, chunk, tts_instruct, waveforms, voice_params)
-                    if not dry_run and self._labels_file_name and self._speech_end_samples > line_start:
+                    if not dry_run and (self._labels_file_name or self._subtitles) and self._speech_end_samples > line_start:
                         self._labels.append((line_start / self._sample_rate, self._speech_end_samples / self._sample_rate, line))
+                        self._label_speakers.append(speaker_name)
 
                 waveforms.append(self._silence(self._new_line_silence_duration))
 
