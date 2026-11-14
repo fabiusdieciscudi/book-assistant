@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument("--debug", action="store_true", default=False, help="Verbose logging (terminal and log file).")
     parser.add_argument("--debug-to-file", action="store_true", default=False, help="Verbose logging only to the log file.")
     parser.add_argument("--log-file", default=None, help="Also write the log to this file (overwritten).")
+    parser.add_argument("--colour", action="store_true", default=False, help="Keep the colours in the log file, as on the terminal.")
     parser.add_argument("--dry-run", action="store_true", default=False, help="Validate without time-expensive operations.")
 
     for command in command_map.values():
@@ -45,9 +46,11 @@ if __name__ == '__main__':
         parser.error("the following arguments are required: path")
     if args.debug_to_file and not args.log_file:
         parser.error("--debug-to-file requires --log-file")
+    if args.colour and not args.log_file:
+        parser.error("--colour requires --log-file")
     set_debug(args.debug)
     set_debug_to_file(args.debug_to_file)
-    set_log_file(args.log_file)
+    set_log_file(args.log_file, args.colour)
     try:
         command_map[args.command].run(args)
     except Exception as e:
