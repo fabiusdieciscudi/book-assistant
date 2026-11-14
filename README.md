@@ -66,7 +66,8 @@ Do not move the script: it detects the Python file position by looking at its ow
 |---------------------|--------------------------------------------------------------|
 | `--debug`           | Enable verbose logging, on the terminal and in the log file. |
 | `--debug-to-file`   | Enable verbose logging only in the log file (requires `--log-file`). |
-| `--log-file <file>` | Also write the log to *file*, which is overwritten, without colours and without the progress lines that overwrite themselves. Each line starts with the local time to the millisecond and the level: `2026-11-12 19:04:13.748+01:00 [WARNING] …` (levels `[ERROR]`, `[WARNING]`, `[INFO]`, `[DEBUG]`). |
+| `--log-file <file>` | Also write the log to *file*, which is overwritten, without colours (unless `--colour`) and without the progress lines that overwrite themselves. Each line starts with the local time to the millisecond and the level: `2026-11-12 19:04:13.748+01:00 [WARNING] …` (levels `[ERROR]`, `[WARNING]`, `[INFO]`, `[DEBUG]`). |
+| `--colour`          | Keep the colours in the log file, as on the terminal (requires `--log-file`). |
 | `--version`         | Print version number.                                        |
 | `--dry-run`         | Validate input without performing time-expensive operations. |
 
