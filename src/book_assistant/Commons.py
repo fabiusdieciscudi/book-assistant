@@ -24,6 +24,7 @@ debugging_to_file = False
 # When set, log() also writes to this file; set via set_log_file().
 log_file = None
 log_file_path = None
+log_file_colours = False
 
 _ANSI_PATTERN = re.compile(r'\033\[[0-9;]*[A-Za-z]')
 
@@ -120,21 +121,28 @@ def _log(message: str, level: str, file_message: str, new_line: bool = True) -> 
         _log_to_file(level, file_message)
 
 def _log_to_file(level: str, message: str) -> None:
-    """Write *message* to the log file, if any: local timestamp to the millisecond, level, text without colours."""
+    """Write *message* to the log file, if any: local timestamp to the millisecond, level, text (without colours, unless
+    enabled: then errors, warnings and debug lines are coloured as on the terminal)."""
     if log_file is not None:
         timestamp = datetime.now().astimezone().isoformat(sep=" ", timespec="milliseconds")
-        print(f"{timestamp} {f'[{level}]':<9} {_ANSI_PATTERN.sub('', message)}", file=log_file, flush=True)
+        line = f"{f'[{level}]':<9} {message}"
+        line = _LEVEL_COLOURS.get(level, str)(line) if log_file_colours else _ANSI_PATTERN.sub('', line)
+        print(f"{timestamp} {line}", file=log_file, flush=True)
 
-def set_log_file(path: str | None) -> None:
-    """Repeat the log, without colours, in the file at *path*, which is overwritten (None to stop).
+_LEVEL_COLOURS = {"ERROR": red, "WARNING": yellow, "DEBUG": magenta}
+
+def set_log_file(path: str | None, colours: bool = False) -> None:
+    """Repeat the log in the file at *path*, which is overwritten (None to stop).
 
     :param path:    the file
+    :param colours: True to keep the colour codes, which are otherwise removed
     """
-    global log_file, log_file_path
+    global log_file, log_file_path, log_file_colours
     if log_file is not None:
         log_file.close()
     log_file = None if path is None else open(path, "w", encoding="utf-8")
     log_file_path = path
+    log_file_colours = colours
 
 def error(message: str) -> None:
     """Log *message* in red to stderr.
