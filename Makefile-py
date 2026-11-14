@@ -24,7 +24,7 @@ pip-install-tools:
 	source $(VENV)/bin/activate && pip install --upgrade "pip>=$(PIP_MIN)"
 	source $(VENV)/bin/activate && pip install --upgrade pip-tools pip-audit "certifi>=$(CERTIFI_MIN)"
 
-pip-install:
+pip-install: pip-install-tools
 	source $(VENV)/bin/activate && yes | pip uninstall qwen-tts
 	source $(VENV)/bin/activate && pip install -r requirements.txt --require-hashes
 	source $(VENV)/bin/activate && pip install --no-deps qwen-tts==0.1.1
