@@ -112,6 +112,7 @@ chapter01.txt[1/312]
 | Option          | Description                                                                               |
 |-----------------|-------------------------------------------------------------------------------------------|
 | `--dict <file>` | Load a custom dictionary file. Can be repeated to load multiple files.                    |
+| `--timeout <s>` | Max. seconds LanguageTool may spend checking a single chunk of text (default: 10).        |
 | `--debug`       | Enable verbose logging.                                                                   |
 
 ---

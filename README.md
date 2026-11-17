@@ -80,7 +80,7 @@ Do not move the script: it detects the Python file position by looking at its ow
 Checks spelling across multilingual manuscripts. Language can be switched mid-file using `@language` tags. Supports custom dictionaries for proper nouns and domain-specific terms.
 
 ```bash
-BookAssistant spellcheck <path> [--dict <dictionary.txt>]
+BookAssistant spellcheck <path> [--dict <dictionary.txt>] [--timeout <seconds>]
 ```
 
 → See [SPELLCHECK.md](docs/SPELLCHECK.md) for full documentation.

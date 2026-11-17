@@ -11,6 +11,7 @@ from ..CommandBase import CommandBase
 from ..Commons import log, red, debug, measure_time
 
 _SPELLCHECK_COMMAND = "spellcheck"
+_DEFAULT_TIMEOUT = 10.0
 
 _LANGUAGE_MAP = {
     'catalan':    'ca',
@@ -34,12 +35,18 @@ class SpellCheckerCommand(CommandBase):
         super().__init__(_SPELLCHECK_COMMAND)
         self._lang_tools: dict[str, LanguageTool] = {}
         self._dictionary: dict[str, set[str]] = {}
+        self._timeout: float = _DEFAULT_TIMEOUT
 
     def process_args(self, parser: ArgumentParser) -> None:
         parser.add_argument("--dict", action="append", default=None,
                             help="Optional custom dictionary file. Can be repeated.")
+        parser.add_argument("--timeout", type=float, default=_DEFAULT_TIMEOUT,
+                            help=f"Max. seconds LanguageTool may spend checking a single chunk of text (default: {_DEFAULT_TIMEOUT:g}).")
 
     def run(self, args) -> None:
+        if args.timeout <= 0:
+            raise ValueError(f"--timeout must be positive, got: {args.timeout}")
+        self._timeout = args.timeout
         for dict_file in (args.dict or []):
             self._load_dictionary(dict_file)
             log(f"Custom dictionary loaded from: {dict_file}")
@@ -126,8 +133,7 @@ class SpellCheckerCommand(CommandBase):
             self._lang_tools[lang_code] = self._create_language_tool(lang_code)
         return self._lang_tools[lang_code]
 
-    @staticmethod
-    def _create_language_tool(lang_code: str) -> LanguageTool:
+    def _create_language_tool(self, lang_code: str) -> LanguageTool:
         """Instantiate a LanguageTool for the given language code.
 
         :param lang_code:   BCP-47 language code
@@ -140,9 +146,9 @@ class SpellCheckerCommand(CommandBase):
             'maxPipelinePoolSize': 200,
             'pipelineExpireTimeInSeconds': 7200,
             'maxCheckThreads': 20,
-            'maxCheckTimeMillis': 5000,
+            'maxCheckTimeMillis': int(self._timeout * 1000),
         }))
-        debug(f"LanguageTool for {lang_code} created in: {seconds:.3f} sec")
+        debug(f"LanguageTool for {lang_code} created in: {seconds:.3f} sec (timeout: {self._timeout:g} sec)")
         return tool
 
     def _check_words(self,
